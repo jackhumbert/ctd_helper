@@ -60,10 +60,11 @@ uintptr_t __fastcall ShowMessageBox(char a1, char a2) {
 }
 
 // 48 83 EC 40 48 8B 02 4C 8B F2 44 0F B7 7A 60
-// 1.6  RVA:  0x27A410
-// 48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 54 41 55 41 56 41 57 48 83 EC 40 48 8B 02 4C
+// 1.52 RVA: 0x27A410 / 2597904
+// 1.6  RVA: 0x27E1E0 / 2613728
+/// @pattern 48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 54 41 55 41 56 41 57 48 83 EC 40 48 8B 02 4C
 void __fastcall CallFunc(RED4ext::IScriptable *, RED4ext::CStackFrame *stackFrame, uintptr_t, uintptr_t);
-constexpr uintptr_t CallFuncAddr = 0x27A410;
+constexpr uintptr_t CallFuncAddr = 0x27E1E0;
 decltype(&CallFunc) CallFunc_Original;
 
 void __fastcall CallFunc(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
@@ -146,7 +147,12 @@ decltype(&sub_142B90C60) sub_142B90C60_Original;
 
 __int64 sub_142B90C60(const char* file, int lineNum, const char * func, const char * message) {
   spdlog::error("File: {} @ Line {}", file, lineNum);
-  spdlog::error("{}", message);
+  if (func) {
+    spdlog::error("  {}", func);
+  }
+  if (message) {
+    spdlog::error("  {}", message);
+  }
   return sub_142B90C60_Original(file, lineNum, func, message);
 }
 
