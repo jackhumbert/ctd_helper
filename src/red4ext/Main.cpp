@@ -138,6 +138,18 @@ void __fastcall CrashFunc(uint8_t a1, uintptr_t a2) {
   CrashFunc_Original(a1, a2);
 }
 
+// 1.6 RVA: 0x2B90C60 / 45681760
+/// @pattern 4C 89 4C 24 20 53 55 56 57 48 83 EC 68 80 3D FC 5E 10 02 00 49 8B D8 8B FA 48 8B F1 74 0C B9 01
+__int64 sub_142B90C60(const char *, int, const char *, const char *);
+constexpr uintptr_t sub_142B90C60Addr = 0x2B90C60;
+decltype(&sub_142B90C60) sub_142B90C60_Original;
+
+__int64 sub_142B90C60(const char* file, int lineNum, const char * func, const char * message) {
+  spdlog::error("File: {} @ Line {}", file, lineNum);
+  spdlog::error("{}", message);
+  return sub_142B90C60_Original(file, lineNum, func, message);
+}
+
 RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::EMainReason aReason,
                                         const RED4ext::Sdk *aSdk) {
   switch (aReason) {
@@ -148,6 +160,9 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::
 
     Utils::CreateLogger();
     spdlog::info("Starting up");
+
+    auto ptr = GetModuleHandle(nullptr);
+    spdlog::info("Base address: {}", fmt::ptr(ptr));
 
     //RED4ext::RTTIRegistrator::Add(RegisterTypes, PostRegisterTypes);
 
@@ -163,6 +178,9 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::
     while (!aSdk->hooking->Attach(aHandle, RED4EXT_OFFSET_TO_ADDR(CrashFuncAddr), &CrashFunc,
                                   reinterpret_cast<void **>(&CrashFunc_Original)))
       ;
+    while (!aSdk->hooking->Attach(aHandle, RED4EXT_OFFSET_TO_ADDR(sub_142B90C60Addr), &sub_142B90C60,
+                                  reinterpret_cast<void **>(&sub_142B90C60_Original)))
+      ;
 
     break;
   }
@@ -175,6 +193,7 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::
     aSdk->hooking->Detach(aHandle, RED4EXT_OFFSET_TO_ADDR(ShowMessageBoxAddr));
     aSdk->hooking->Detach(aHandle, RED4EXT_OFFSET_TO_ADDR(CallFuncAddr));
     aSdk->hooking->Detach(aHandle, RED4EXT_OFFSET_TO_ADDR(CrashFuncAddr));
+    aSdk->hooking->Detach(aHandle, RED4EXT_OFFSET_TO_ADDR(sub_142B90C60Addr));
     spdlog::shutdown();
     break;
   }
