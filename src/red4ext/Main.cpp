@@ -70,19 +70,19 @@ decltype(&CallFunc) CallFunc_Original;
 void __fastcall CallFunc(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
   auto func = *reinterpret_cast<RED4ext::CBaseFunction **>(stackFrame->code + 4);
   if (func) {
-    auto call = new Call();
-    call->cls = func->GetParent();
+    auto call = Call();
+    call.cls = func->GetParent();
     if (context && context->ref.instance == context) {
-      call->parentCls = context->GetType();
+      call.parentCls = context->GetType();
     }
-    call->fullName = func->fullName;
-    call->shortName = func->shortName;
+    call.fullName = func->fullName;
+    call.shortName = func->shortName;
     if (stackFrame->func) {
       auto parent = reinterpret_cast<RED4ext::CBaseFunction *>(stackFrame->func);
-      call->parentFullName = parent->fullName;
-      call->parentShortName = parent->shortName;
+      call.parentFullName = parent->fullName;
+      call.parentShortName = parent->shortName;
     }
-    call->callTime = std::time(0);
+    call.callTime = std::time(0);
 
     auto thread = std::this_thread::get_id();
     auto hash = std::hash<std::thread::id>()(thread);
@@ -92,7 +92,7 @@ void __fastcall CallFunc(RED4ext::IScriptable *context, RED4ext::CStackFrame *st
       callQueues.insert_or_assign(hash, std::deque<Call>());
     }
     auto queue = callQueues.find(hash);
-    queue->second.emplace_back(*call);
+    queue->second.emplace_back(call);
     while (queue->second.size() > 8) {
       queue->second.pop_front();
     }
@@ -211,7 +211,7 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::
 RED4EXT_C_EXPORT void RED4EXT_CALL Query(RED4ext::PluginInfo *aInfo) {
   aInfo->name = L"CTD Helper";
   aInfo->author = L"Jack Humbert";
-  aInfo->version = RED4EXT_SEMVER(0, 0, 1);
+  aInfo->version = RED4EXT_SEMVER(0, 0, 2);
   aInfo->runtime = RED4EXT_RUNTIME_LATEST;
   aInfo->sdk = RED4EXT_SDK_LATEST;
 }
