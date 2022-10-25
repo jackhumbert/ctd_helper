@@ -4,6 +4,9 @@
 #include <map>
 #include <spdlog/spdlog.h>
 #include "Utils.hpp"
+#include "ScriptHost.hpp"
+
+#define MAX_CALLS 8
 
 struct Call {
   RED4ext::CClass *cls;
@@ -13,10 +16,43 @@ struct Call {
   RED4ext::CName parentFullName;
   RED4ext::CName parentShortName;
   std::time_t callTime;
+  uint32_t fileIndex;
+  uint32_t unk04;
+
+  std::string GetFunc() {
+    std::string fullName(this->fullName.ToString());
+    if (fullName.find(";") != -1) {
+      fullName.replace(fullName.find(";"), 1, "(");
+      while (fullName.find(";") != -1) {
+        fullName.replace(fullName.find(";"), 1, ", ");
+      }
+    } else {
+      fullName.append("(");
+    }
+    fullName.append(")");
+
+    return fullName;
+  }
+
+  std::string GetParentFunc() {
+    std::string fullName(this->parentFullName.ToString());
+    if (fullName.find(";") != -1) {
+      fullName.replace(fullName.find(";"), 1, "(");
+      while (fullName.find(";") != -1) {
+        fullName.replace(fullName.find(";"), 1, ", ");
+      }
+    } else {
+      fullName.append("(");
+    }
+    fullName.append(")");
+
+    return fullName;
+  }
 };
 
 std::mutex queueLock;
 std::map<size_t, std::deque<Call>> callQueues;
+size_t lastThread;
 
 bool scriptLinkingError = false;
 
@@ -81,11 +117,14 @@ void __fastcall CallFunc(RED4ext::IScriptable *context, RED4ext::CStackFrame *st
       auto parent = reinterpret_cast<RED4ext::CBaseFunction *>(stackFrame->func);
       call.parentFullName = parent->fullName;
       call.parentShortName = parent->shortName;
+      call.fileIndex = stackFrame->func->bytecode.fileIndex;
+      call.unk04 = stackFrame->func->bytecode.unk04;
     }
     call.callTime = std::time(0);
 
     auto thread = std::this_thread::get_id();
     auto hash = std::hash<std::thread::id>()(thread);
+    lastThread = hash;
 
     std::lock_guard<std::mutex> lock(queueLock);
     if (!callQueues.contains(hash)) {
@@ -93,7 +132,7 @@ void __fastcall CallFunc(RED4ext::IScriptable *context, RED4ext::CStackFrame *st
     }
     auto queue = callQueues.find(hash);
     queue->second.emplace_back(call);
-    while (queue->second.size() > 8) {
+    while (queue->second.size() > MAX_CALLS) {
       queue->second.pop_front();
     }
   }
@@ -107,31 +146,65 @@ void __fastcall CrashFunc(uint8_t a1, uintptr_t a2);
 constexpr uintptr_t CrashFuncAddr = 0x2B93EF0;
 decltype(&CrashFunc) CrashFunc_Original;
 
+RED4ext::RelocPtr<ScriptHost> ScriptsHost(ScriptsHost_p);
+
 void __fastcall CrashFunc(uint8_t a1, uintptr_t a2) {
   spdlog::error("Crash! Last called functions in each thread:");
   for (auto &queue : callQueues) {
-    spdlog::error("Thread hash: {0}", queue.first);
+    auto level = 0;
+    std::deque<uint64_t> stack;
+    auto crashing = lastThread == queue.first;
+    spdlog::error("Thread hash: {0}{1}", queue.first, crashing ? " CRASHING":"");
     uint64_t last = 0;
-    uint64_t lastParent = 0;
     for (auto i = 0; queue.second.size(); i++) {
       auto call = queue.second.front();
-      if (call.parentCls && call.parentShortName) {
-        uint64_t parent = call.parentCls->GetName() ^ call.parentShortName;
-        if (parent == last) {
-          lastParent = last;
-        } else if (lastParent != parent) {
-          lastParent = parent;
-          spdlog::error("  {0}::{1}", call.parentCls->GetName().ToString(), call.parentShortName.ToString());
-        }
-      } else {
-        lastParent = 0;
+      auto filename = "<no file>";
+      auto scriptFile = ScriptsHost.GetAddr()->files.values[call.fileIndex];
+      if (scriptFile) {
+        filename = scriptFile->filename.c_str();
       }
+      if (call.parentFullName) {
+        uint64_t parent = call.parentFullName;
+
+        if (last == 0) {
+          stack.emplace_front(parent);
+          spdlog::error("  Func:   {}", call.GetParentFunc());
+          spdlog::error("  Class:  {}", call.parentCls->GetName().ToString());
+        } else {
+          if (parent == last) {
+            stack.emplace_front(parent);
+          } else if (stack.front() != parent) {
+            stack.pop_front();
+            if (stack.size() == 0 || (stack.size() > 0 && stack.front() != parent)) {
+              stack.emplace_front(parent);
+              spdlog::error("  Func:   {}", call.GetParentFunc());
+              spdlog::error("  Class:  {}", call.parentCls->GetName().ToString());
+            }
+          }
+        }
+
+
+
+        //if (stack.size() > 0 && parent != stack.front()) {
+        //  if (parent != last) {
+        //    if (stack.size() > 0 || (stack.size() > 0 && stack.front() != last)) {
+        //      stack.pop_front();
+        //    }
+        //  }
+        //} else {
+        //  stack.emplace_front(parent);
+        //  spdlog::error("{}", call.GetParentFunc());
+        //  spdlog::error("Class:  {}", call.parentCls->GetName().ToString());
+        //}
+      }
+      last = call.fullName;
+      auto index = fmt::format("{}", MAX_CALLS - i - 1);
+      spdlog::error(" {:>{}} Func:   {}", index == "0" ? ">" : index, stack.size() * 2, call.GetFunc());
       if (call.cls) {
-        last = call.cls->GetName() ^ call.shortName;
-        spdlog::error("{0} {1}- {2}::{3}", i + 1, lastParent == last ? "  " : "", call.cls->GetName().ToString(),
-                      call.shortName.ToString());
-      } else {
-        spdlog::error("{0} {1}- {2}", i + 1, lastParent == last ? "  " : "", call.fullName.ToString());
+        spdlog::error(" {:>{}} Class:  {}", " ", stack.size() * 2, call.cls->GetName().ToString());
+      }
+      if (call.fileIndex != 0 && call.unk04 != 0) {
+        spdlog::error(" {:>{}} Source: {}:{}", " ", stack.size() * 2, filename, call.unk04);
       }
       queue.second.pop_front();
     }
@@ -211,7 +284,7 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::
 RED4EXT_C_EXPORT void RED4EXT_CALL Query(RED4ext::PluginInfo *aInfo) {
   aInfo->name = L"CTD Helper";
   aInfo->author = L"Jack Humbert";
-  aInfo->version = RED4EXT_SEMVER(0, 0, 2);
+  aInfo->version = RED4EXT_SEMVER(0, 0, 3);
   aInfo->runtime = RED4EXT_RUNTIME_LATEST;
   aInfo->sdk = RED4EXT_SDK_LATEST;
 }
