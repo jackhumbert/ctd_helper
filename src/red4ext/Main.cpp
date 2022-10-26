@@ -105,6 +105,8 @@ decltype(&CallFunc) CallFunc_Original;
 
 void __fastcall CallFunc(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
   auto func = *reinterpret_cast<RED4ext::CBaseFunction **>(stackFrame->code + 4);
+  auto thread = std::this_thread::get_id();
+  auto hash = std::hash<std::thread::id>()(thread);
   if (func) {
     auto call = Call();
     call.cls = func->GetParent();
@@ -122,8 +124,6 @@ void __fastcall CallFunc(RED4ext::IScriptable *context, RED4ext::CStackFrame *st
     }
     call.callTime = std::time(0);
 
-    auto thread = std::this_thread::get_id();
-    auto hash = std::hash<std::thread::id>()(thread);
     lastThread = hash;
 
     std::lock_guard<std::mutex> lock(queueLock);
@@ -154,7 +154,7 @@ void __fastcall CrashFunc(uint8_t a1, uintptr_t a2) {
     auto level = 0;
     std::deque<uint64_t> stack;
     auto crashing = lastThread == queue.first;
-    spdlog::error("Thread hash: {0}{1}", queue.first, crashing ? " CRASHING":"");
+    spdlog::error("Thread hash: {0}{1}", queue.first, crashing ? " LAST EXECUTED":"");
     uint64_t last = 0;
     for (auto i = 0; queue.second.size(); i++) {
       auto call = queue.second.front();
