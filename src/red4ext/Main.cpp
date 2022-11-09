@@ -63,9 +63,11 @@ const wchar_t *errorMessageEnd = L"\nYou can press Ctrl+C to copy this message, 
                                  L"log at red4ext/logs/ctd_helper.log";
 const wchar_t *errorCaption = L"Script Type Validation Error";
 
+// 1.6  RVA: 0xA885B0
+// 1.61 RVA: 0xA88980
 // 40 55 48 83 EC 40 80 39  00 48 8B EA 0F 84 C5 00 00 00 48 89 7C 24 60 48 8B 79 18 44 8B 47 0C 44
 void __fastcall DebugPrint(uintptr_t, RED4ext::CString *);
-constexpr uintptr_t DebugPrintAddr = 0xA885B0;
+constexpr uintptr_t DebugPrintAddr = 0xA88980;
 decltype(&DebugPrint) DebugPrint_Original;
 
 void __fastcall DebugPrint(uintptr_t a1, RED4ext::CString *a2) {
@@ -80,9 +82,10 @@ void __fastcall DebugPrint(uintptr_t a1, RED4ext::CString *a2) {
 
 // 1.52 RVA: 0xA66B50 / 10906448
 // 1.6  RVA: 0xA704D0
+// 1.61 RVA: 0xA708A0
 // 48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 20 55 48 8D 6C 24 A9 48 81 EC B0 00 00 00 0F B6 D9 0F
 uintptr_t __fastcall ShowMessageBox(char, char);
-constexpr uintptr_t ShowMessageBoxAddr = 0xA704D0;
+constexpr uintptr_t ShowMessageBoxAddr = 0xA708A0;
 decltype(&ShowMessageBox) ShowMessageBox_Original;
 
 uintptr_t __fastcall ShowMessageBox(char a1, char a2) {
@@ -98,9 +101,10 @@ uintptr_t __fastcall ShowMessageBox(char a1, char a2) {
 // 48 83 EC 40 48 8B 02 4C 8B F2 44 0F B7 7A 60
 // 1.52 RVA: 0x27A410 / 2597904
 // 1.6  RVA: 0x27E1E0 / 2613728
+// 1.61 RVA: 0x27E790
 /// @pattern 48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 54 41 55 41 56 41 57 48 83 EC 40 48 8B 02 4C
 void __fastcall CallFunc(RED4ext::IScriptable *, RED4ext::CStackFrame *stackFrame, uintptr_t, uintptr_t);
-constexpr uintptr_t CallFuncAddr = 0x27E1E0;
+constexpr uintptr_t CallFuncAddr = 0x27E790;
 decltype(&CallFunc) CallFunc_Original;
 
 void __fastcall CallFunc(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
@@ -140,10 +144,12 @@ void __fastcall CallFunc(RED4ext::IScriptable *context, RED4ext::CStackFrame *st
 }
 
 // 48 8D 68 A1 48 81 EC A0 00 00 00 0F B6 F1
-// 1.6 RVA: 0x2B93EF0 / 45694704
-// 48 8B C4 55 56 57 48 8D 68 A1 48 81 EC A0 00 00 00 0F B6 F1 48 8B FA 48 8B 0D AA 5B 10 02 48 83
+// 1.6  RVA: 0x2B93EF0 / 45694704
+// 1.61 RVA: 0x2B99290
+// 48 8B C4 55 56 57 48 8D 68 A1 48 81 EC A0
+// index 2
 void __fastcall CrashFunc(uint8_t a1, uintptr_t a2);
-constexpr uintptr_t CrashFuncAddr = 0x2B93EF0;
+constexpr uintptr_t CrashFuncAddr = 0x2B99290;
 decltype(&CrashFunc) CrashFunc_Original;
 
 RED4ext::RelocPtr<ScriptHost> ScriptsHost(ScriptsHost_p);
@@ -212,10 +218,11 @@ void __fastcall CrashFunc(uint8_t a1, uintptr_t a2) {
   CrashFunc_Original(a1, a2);
 }
 
-// 1.6 RVA: 0x2B90C60 / 45681760
-/// @pattern 4C 89 4C 24 20 53 55 56 57 48 83 EC 68 80 3D FC 5E 10 02 00 49 8B D8 8B FA 48 8B F1 74 0C B9 01
+// 1.6  RVA: 0x2B90C60 / 45681760
+// 1.61 RVA: 0x2B96000
+/// @pattern 4C 89 4C 24 20 53 55 56 57 48 83 EC 68
 __int64 sub_142B90C60(const char *, int, const char *, const char *);
-constexpr uintptr_t sub_142B90C60Addr = 0x2B90C60;
+constexpr uintptr_t sub_142B90C60Addr = 0x2B96000;
 decltype(&sub_142B90C60) sub_142B90C60_Original;
 
 __int64 sub_142B90C60(const char* file, int lineNum, const char * func, const char * message) {
@@ -238,7 +245,7 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::
     // is not initalized yet.
 
     Utils::CreateLogger();
-    spdlog::info("Starting up");
+    spdlog::info("Starting up CTD Helper v0.0.4");
 
     auto ptr = GetModuleHandle(nullptr);
     spdlog::info("Base address: {}", fmt::ptr(ptr));
@@ -284,7 +291,7 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::
 RED4EXT_C_EXPORT void RED4EXT_CALL Query(RED4ext::PluginInfo *aInfo) {
   aInfo->name = L"CTD Helper";
   aInfo->author = L"Jack Humbert";
-  aInfo->version = RED4EXT_SEMVER(0, 0, 3);
+  aInfo->version = RED4EXT_SEMVER(0, 0, 4);
   aInfo->runtime = RED4EXT_RUNTIME_LATEST;
   aInfo->sdk = RED4EXT_SDK_LATEST;
 }
