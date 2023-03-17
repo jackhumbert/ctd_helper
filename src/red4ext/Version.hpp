@@ -1,0 +1,7 @@
+#pragma once
+
+#define MOD_VER_MAJOR 0
+#define MOD_VER_MINOR 1
+#define MOD_VER_PATCH 0
+
+#define MOD_VERSION MOD_VER_MAJOR * 10000 + MOD_VER_MINOR * 100 + MOD_VER_PATCH

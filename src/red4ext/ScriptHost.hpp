@@ -1,4 +1,5 @@
 #include <RED4ext/RED4ext.hpp>
+#include "Addresses.hpp"
 
 struct ScriptFile {
   RED4ext::CName name;
@@ -14,7 +15,12 @@ enum EBreakpointState : unsigned __int8 {
 };
 
 struct ScriptHost {
-  static constexpr const uintptr_t VFT_RVA = 0x30E74C0;
+  // Just after "PortRange"
+  // 1.6  RVA: 0x30E74C0
+  // 1.62 RVA: 0x30EF5C0
+  /// @pattern 50 6F 72 74 52 61 6E 67 65 00 00 00 00 00 00 00
+  /// @offset -16
+  static constexpr const uintptr_t VFT_RVA = ScriptHost_VFT_RVA_Addr;
 
   virtual inline void sub_00() {}; // empty
   virtual inline void sub_08() {}; // load
@@ -57,6 +63,14 @@ struct ScriptHost {
   virtual inline void sub_90() {};
   virtual inline void sub_98() {};
 
+  // 1.6  RVA: 0x26BA70 / 2538096
+  // 1.62 RVA: 0x26C0A0 / 2539680
+  /// @pattern 40 53 48 83 EC 20 65 48 8B 04 25 58 00 00 00 8B 0D ? ? 9F 04 BA 9C 07 00 00 48 8B 0C C8 8B 04
+  static ScriptHost * Get() {
+    RED4ext::RelocFunc<decltype(&ScriptHost::Get)> call(ScriptHost_Get_Addr);
+    return call();
+  };
+
   void *vft2;
   RED4ext::DynArray<void *> unk10;
   uint32_t unk20; // state?
@@ -84,4 +98,4 @@ struct ScriptHost {
 RED4EXT_ASSERT_OFFSET(ScriptHost, files, 0x30);
  //char (*__kaboom)[offsetof(ScriptHost, unk10)] = 1;
 
-const uintptr_t ScriptsHost_p = 0x3F17738;
+//const uintptr_t ScriptsHost_p = 0x3F17738;

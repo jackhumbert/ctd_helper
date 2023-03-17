@@ -17,6 +17,8 @@
 mono_crash.*
 
 .build
+build
+
 
 # Build results
 # [Dd]ebug/
@@ -42,6 +44,7 @@ build*.zip
 resources/ctd_helper.zip
 resources/install_log.xml
 prereqs.redscripts
+*.zip
 
 Cyberpunk2077.exe*
 REDEngineErrorReporter.exe*
