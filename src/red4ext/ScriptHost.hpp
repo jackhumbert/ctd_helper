@@ -17,10 +17,11 @@ enum EBreakpointState : unsigned __int8 {
 struct ScriptHost {
   // Just after "PortRange"
   // 1.6  RVA: 0x30E74C0
-  // 1.62 RVA: 0x30EF5C0
+  // 1.61hf RVA: 0x30EF5C0
+  // 1.62 RVA: 0x3126DC0
   /// @pattern 50 6F 72 74 52 61 6E 67 65 00 00 00 00 00 00 00
   /// @offset -16
-  static constexpr const uintptr_t VFT_RVA = ScriptHost_VFT_RVA_Addr;
+  static constexpr const uintptr_t VFT = 0x3126DC0;
 
   virtual inline void sub_00() {}; // empty
   virtual inline void sub_08() {}; // load
@@ -44,13 +45,13 @@ struct ScriptHost {
 
   // something with (),
   virtual inline bool sub_50(RED4ext::CString * a1) {
-    RED4ext::RelocFunc<decltype(&ScriptHost::sub_50)> call(VFT_RVA, 0x50);
+    RED4ext::RelocFunc<decltype(&ScriptHost::sub_50)> call(VFT, 0x50);
     return call(this, a1);
   };
 
   // something else with (),
   virtual inline bool sub_58(bool * a1, RED4ext::CString * a2) {
-    RED4ext::RelocFunc<decltype(&ScriptHost::sub_58)> call(VFT_RVA, 0x58);
+    RED4ext::RelocFunc<decltype(&ScriptHost::sub_58)> call(VFT, 0x58);
     return call(this, a1, a2);
   };
 
@@ -65,7 +66,8 @@ struct ScriptHost {
 
   // 1.6  RVA: 0x26BA70 / 2538096
   // 1.62 RVA: 0x26C0A0 / 2539680
-  /// @pattern 40 53 48 83 EC 20 65 48 8B 04 25 58 00 00 00 8B 0D ? ? 9F 04 BA 9C 07 00 00 48 8B 0C C8 8B 04
+  /// @pattern 40 53 48 83 EC 20 65 48 8B 04 25 58 00 00 00 8B 0D ? ? ? 04 BA 9C 07 00 00 48 8B 0C C8 8B 04
+  /// @nth 25/0
   static ScriptHost * Get() {
     RED4ext::RelocFunc<decltype(&ScriptHost::Get)> call(ScriptHost_Get_Addr);
     return call();

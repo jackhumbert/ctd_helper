@@ -69,7 +69,7 @@ const wchar_t *errorCaption = L"Script Type Validation Error";
 
 // 1.6  RVA: 0xA885B0
 // 1.61 RVA: 0xA88980
-// 1.62 RVA: 0xA88F20
+// 1.61hf RVA: 0xA88F20
 /// @pattern 40 55 48 83 EC 40 80 39  00 48 8B EA 0F 84 C5 00 00 00 48 89 7C 24 60 48 8B 79 18 44 8B 47 0C 44
 void __fastcall DebugPrint(uintptr_t, RED4ext::CString *);
 
@@ -87,7 +87,7 @@ REGISTER_HOOK(void __fastcall, DebugPrint, uintptr_t a1, RED4ext::CString *a2) {
 // 1.52 RVA: 0xA66B50 / 10906448
 // 1.6  RVA: 0xA704D0
 // 1.61 RVA: 0xA708A0
-// 1.62 RVA: 0xA70DE0
+// 1.61hf1 RVA: 0xA70DE0
 /// @pattern 48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 20 55 48 8D 6C 24 A9 48 81 EC B0 00 00 00 0F B6 D9 0F
 uintptr_t __fastcall ShowMessageBox(char, char);
 
@@ -105,7 +105,7 @@ REGISTER_HOOK(uintptr_t __fastcall, ShowMessageBox, char a1, char a2) {
 // 1.52 RVA: 0x27A410 / 2597904
 // 1.6  RVA: 0x27E1E0 / 2613728
 // 1.61 RVA: 0x27E790
-// 1.62 RVA: 0x27E810
+// 1.61hf RVA: 0x27E810
 /// @pattern 48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 54 41 55 41 56 41 57 48 83 EC 40 48 8B 02 4C
 void __fastcall CallFunc(RED4ext::IScriptable *, RED4ext::CStackFrame *stackFrame, uintptr_t, uintptr_t);
 
@@ -148,7 +148,7 @@ REGISTER_HOOK(void __fastcall, CallFunc, RED4ext::IScriptable *context, RED4ext:
 // 48 8D 68 A1 48 81 EC A0 00 00 00 0F B6 F1
 // 1.6  RVA: 0x2B93EF0 / 45694704
 // 1.61 RVA: 0x2B99290
-// 1.62 RVA: 0x2B9BC70
+// 1.61hf RVA: 0x2B9BC70
 /// @pattern 48 8B C4 55 56 57 48 8D 68 A1 48 81 EC A0
 /// @nth 2/3
 void __fastcall CrashFunc(uint8_t a1, uintptr_t a2);
@@ -219,7 +219,7 @@ REGISTER_HOOK(void __fastcall, CrashFunc, uint8_t a1, uintptr_t a2) {
 
 // 1.6  RVA: 0x2B90C60 / 45681760
 // 1.61 RVA: 0x2B96000
-// 1.62 RVA: 0x2B989E0
+// 1.61hf RVA: 0x2B989E0
 /// @pattern 4C 89 4C 24 20 53 55 56 57 48 83 EC 68
 __int64 sub_142B90C60(const char *, int, const char *, const char *);
 
