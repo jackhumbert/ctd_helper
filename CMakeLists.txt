@@ -56,7 +56,7 @@ add_custom_command(
   DEPENDS ${ZOLTAN_USER_SIGNATURES}
   # COMMAND ${MOD_TOOLS_DIR}/zoltan-clang.exe
   COMMAND "C:/Users/Jack/Documents/cyberpunk/zoltan/target/debug/zoltan-clang.exe"
-  ARGS ${ZOLTAN_USER_SIGNATURES} "${CYBERPUNK_2077_GAME_DIR}/bin/x64/Cyberpunk2077.exe" -f "std=c++20" -f "I${PROJECT_SOURCE_DIR}/deps/red4ext.sdk/include" --c-output "${ZOLTAN_USER_ADDRESSES}"
+  ARGS ${ZOLTAN_USER_SIGNATURES} "${CYBERPUNK_2077_GAME_DIR}/bin/x64/Cyberpunk2077.exe" -f "std=c++20" -f "I${PROJECT_SOURCE_DIR}/deps/red4ext.sdk/include" --c-output "${ZOLTAN_USER_ADDRESSES}" --safe-addr
   COMMENT "Finding binary addresses of declared functions in Signatures.hpp"
 )
 
