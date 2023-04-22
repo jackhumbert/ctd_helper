@@ -21,7 +21,7 @@ struct ScriptHost {
   // 1.62 RVA: 0x3126DC0
   /// @pattern 50 6F 72 74 52 61 6E 67 65 00 00 00 00 00 00 00
   /// @offset -16
-  static constexpr const uintptr_t VFT = 0x3126DC0;
+  static constexpr const uintptr_t VFT = ScriptHost_VFT_Addr;
 
   virtual inline void sub_00() {}; // empty
   virtual inline void sub_08() {}; // load

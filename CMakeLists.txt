@@ -1,13 +1,19 @@
 cmake_minimum_required(VERSION 3.24)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 include(CMakeDependentOption)
 
 project(
   ctd_helper
-  VERSION 0.1.0
+  DESCRIPTION "CTD Helper"
+  VERSION 0.1.1
   LANGUAGES CXX
 )
 
+set(MOD_CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+list(APPEND CMAKE_MODULE_PATH ${MOD_CMAKE_MODULE_PATH})
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/deps/red4ext.sdk/cmake")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 set(CMAKE_CXX_STANDARD 20)
@@ -15,6 +21,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # user-configurable options
 set(CYBERPUNK_2077_GAME_DIR "C:/Program Files (x86)/Steam/steamapps/common/Cyberpunk 2077" CACHE STRING "Cyberpunk 2077 game directory")
+
+include(GetGameVersion)
 
 set(MOD_GAME_DIR "${PROJECT_SOURCE_DIR}/game_dir")
 set(MOD_TOOLS_DIR "${PROJECT_SOURCE_DIR}/tools")
@@ -38,6 +46,21 @@ add_compile_definitions(
 
   # for Codeware
   NOMINMAX
+
+  MOD_VER_MAJOR=${PROJECT_VERSION_MAJOR}
+  MOD_VER_MINOR=${PROJECT_VERSION_MINOR}
+  MOD_VER_PATCH=${PROJECT_VERSION_PATCH}
+
+  VER_FILEVERSION=${PROJECT_VERSION_MAJOR},${PROJECT_VERSION_MINOR},${PROJECT_VERSION_PATCH}
+  VER_FILEVERSION_STR="${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}"
+  VER_PRODUCTVERSION=${CYBERPUNK_FILE_VERSION}
+  VER_PRODUCTVERSION_STR="${CYBERPUNK_FILE_VERSION}"
+  VER_COMPANYNAME="${PROJECT_AUTHOR}"
+  VER_FILEDESCRIPTION_STR="${PROJECT_DESCRIPTION}"
+  VER_LEGALCOPYRIGHT_STR="Jack Humbert"
+  VER_COMPANYNAME_STR="Jack Humbert"
+  VER_PRODUCTNAME_STR="${CMAKE_PROJECT_NAME}"
+  FILE_NAME_STR="${CMAKE_PROJECT_NAME}.dll"
 )
 
 # Dependencies
@@ -57,7 +80,7 @@ add_custom_command(
   # COMMAND ${MOD_TOOLS_DIR}/zoltan-clang.exe
   COMMAND "C:/Users/Jack/Documents/cyberpunk/zoltan/target/debug/zoltan-clang.exe"
   ARGS ${ZOLTAN_USER_SIGNATURES} "${CYBERPUNK_2077_GAME_DIR}/bin/x64/Cyberpunk2077.exe" -f "std=c++20" -f "I${PROJECT_SOURCE_DIR}/deps/red4ext.sdk/include" --c-output "${ZOLTAN_USER_ADDRESSES}" --safe-addr
-  COMMENT "Finding binary addresses of declared functions in Signatures.hpp"
+  COMMENT "Finding binary addresses of declared functions in Main.hpp"
 )
 
 add_custom_target(addresses DEPENDS ${ZOLTAN_USER_ADDRESSES})

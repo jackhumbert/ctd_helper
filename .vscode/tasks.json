@@ -238,5 +238,12 @@
         "problemMatcher": [],
         "dependsOn": ["Install"]
       },
+      {
+        "type": "cmake",
+        "label": "Install Mod",
+        "command": "install",
+        "problemMatcher": [],
+        "detail": "Install files into the game's installation directory"
+      }
     ]
   }
