@@ -9,6 +9,10 @@ option(SPDLOG_WCHAR_SUPPORT "" ON)
 add_subdirectory(deps/spdlog)
 set_target_properties(spdlog PROPERTIES FOLDER "Dependencies")
 
+target_compile_definitions(spdlog PUBLIC
+_ITERATOR_DEBUG_LEVEL=0
+)
+
 mark_as_advanced(
   SPDLOG_BUILD_ALL
   SPDLOG_BUILD_BENCH

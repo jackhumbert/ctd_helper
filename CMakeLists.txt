@@ -29,11 +29,7 @@ find_package(Spdlog)
 target_link_libraries(${MOD_SLUG}.dll
   PUBLIC
     Detours
-    FMOD
     spdlog
-    RedLib
-    PhysX3
-    input_loader.dll
 )
 
 configure_folder_file(readme.md)
