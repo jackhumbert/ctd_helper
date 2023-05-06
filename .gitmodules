@@ -8,3 +8,6 @@
 	path = deps/red4ext.sdk
 	url = https://github.com/jackhumbert/RED4ext.SDK.git
 	branch = new-types
+[submodule "deps/cyberpunk_cmake"]
+	path = deps/cyberpunk_cmake
+	url = git@github.com:jackhumbert/cyberpunk_cmake.git

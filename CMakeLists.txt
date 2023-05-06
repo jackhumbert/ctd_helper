@@ -1,139 +1,44 @@
 cmake_minimum_required(VERSION 3.24)
 
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+project(ctd_helper VERSION 0.1.2)
 
-include(CMakeDependentOption)
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/deps/cyberpunk_cmake")
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/deps/red4ext.sdk/cmake")
 
-project(
-  ctd_helper
-  DESCRIPTION "CTD Helper"
-  VERSION 0.1.1
-  LANGUAGES CXX
+include(CyberpunkMod)
+
+configure_mod(
+  NAME "CTD Helper"
+  SLUG ${PROJECT_NAME}
+  PREFIX CTD_HELPER
+  AUTHOR "Jack Humbert"
+  URL "https://github.com/jackhumbert/ctd_helper"
+  LICENSE "Licensed under the MIT license. See the license.md in the root project for details."
 )
 
-set(MOD_CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
-list(APPEND CMAKE_MODULE_PATH ${MOD_CMAKE_MODULE_PATH})
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/deps/red4ext.sdk/cmake")
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+find_program(ZOLTAN_CLANG_EXE NAMES zoltan-clang.exe PATHS "${MOD_TOOLS_DIR}" CACHE)
+find_program(CYBERPUNK_2077_EXE NAMES Cyberpunk2077.exe PATHS "${CYBERPUNK_2077_GAME_DIR}/bin/x64" CACHE DOC "Cyberpunk2077.exe Executable File")
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+configure_red4ext(src/red4ext)
+configure_red4ext_addresses(Main.cpp Addresses.hpp)
 
-# user-configurable options
-set(CYBERPUNK_2077_GAME_DIR "C:/Program Files (x86)/Steam/steamapps/common/Cyberpunk 2077" CACHE STRING "Cyberpunk 2077 game directory")
+find_package(Detours)
+find_package(Spdlog)
 
-include(GetGameVersion)
-
-set(MOD_GAME_DIR "${PROJECT_SOURCE_DIR}/game_dir")
-set(MOD_TOOLS_DIR "${PROJECT_SOURCE_DIR}/tools")
-
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-
-add_compile_definitions(
-  # Support Windows 7 and above.
-  WINVER=0x0601
-  _WIN32_WINNT=0x0601
-
-  # Exclude unnecessary APIs.
-  WIN32_LEAN_AND_MEAN
-
-  # Use Unicode charset.
-  UNICODE
-  _UNICODE
-
-  # https://github.com/microsoft/STL/issues/1934
-  _ITERATOR_DEBUG_LEVEL=0
-
-  # for Codeware
-  NOMINMAX
-
-  MOD_VER_MAJOR=${PROJECT_VERSION_MAJOR}
-  MOD_VER_MINOR=${PROJECT_VERSION_MINOR}
-  MOD_VER_PATCH=${PROJECT_VERSION_PATCH}
-
-  VER_FILEVERSION=${PROJECT_VERSION_MAJOR},${PROJECT_VERSION_MINOR},${PROJECT_VERSION_PATCH}
-  VER_FILEVERSION_STR="${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}"
-  VER_PRODUCTVERSION=${CYBERPUNK_FILE_VERSION}
-  VER_PRODUCTVERSION_STR="${CYBERPUNK_FILE_VERSION}"
-  VER_COMPANYNAME="${PROJECT_AUTHOR}"
-  VER_FILEDESCRIPTION_STR="${PROJECT_DESCRIPTION}"
-  VER_LEGALCOPYRIGHT_STR="Jack Humbert"
-  VER_COMPANYNAME_STR="Jack Humbert"
-  VER_PRODUCTNAME_STR="${CMAKE_PROJECT_NAME}"
-  FILE_NAME_STR="${CMAKE_PROJECT_NAME}.dll"
+target_link_libraries(${MOD_SLUG}.dll
+  PUBLIC
+    Detours
+    FMOD
+    spdlog
+    RedLib
+    PhysX3
+    input_loader.dll
 )
 
-# Dependencies
+configure_folder_file(readme.md)
+configure_folder_file(license.md)
 
-include(ConfigureAndIncludeDetours)
-include(ConfigureAndIncludeRED4extSdk)
-include(ConfigureAndIncludeSpdlog)
-
-# Find Addresses
-
-set(ZOLTAN_USER_SIGNATURES "${PROJECT_SOURCE_DIR}/src/red4ext/Main.cpp")
-set(ZOLTAN_USER_ADDRESSES "${PROJECT_SOURCE_DIR}/src/red4ext/Addresses.hpp")
-
-add_custom_command(
-  OUTPUT ${ZOLTAN_USER_ADDRESSES}
-  DEPENDS ${ZOLTAN_USER_SIGNATURES}
-  # COMMAND ${MOD_TOOLS_DIR}/zoltan-clang.exe
-  COMMAND "C:/Users/Jack/Documents/cyberpunk/zoltan/target/debug/zoltan-clang.exe"
-  ARGS ${ZOLTAN_USER_SIGNATURES} "${CYBERPUNK_2077_GAME_DIR}/bin/x64/Cyberpunk2077.exe" -f "std=c++20" -f "I${PROJECT_SOURCE_DIR}/deps/red4ext.sdk/include" --c-output "${ZOLTAN_USER_ADDRESSES}" --safe-addr
-  COMMENT "Finding binary addresses of declared functions in Main.hpp"
-)
-
-add_custom_target(addresses DEPENDS ${ZOLTAN_USER_ADDRESSES})
-
-# DLL
-
-add_subdirectory(src/red4ext)
-
-# License
-
-set(MOD_SOURCE_LICENSE_FILE "${PROJECT_SOURCE_DIR}/license.md")
-set(MOD_GAME_DIR_LICENSE_FILE "${MOD_GAME_DIR}/red4ext/plugins/${CMAKE_PROJECT_NAME}/license.md")
-
-add_custom_command(
-  OUTPUT ${MOD_GAME_DIR_LICENSE_FILE}
-  DEPENDS ${MOD_SOURCE_LICENSE_FILE}
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${MOD_SOURCE_LICENSE_FILE} ${MOD_GAME_DIR_LICENSE_FILE}
-)
-
-add_custom_target(license DEPENDS ${MOD_GAME_DIR_LICENSE_FILE})
-
-# Readme
-
-set(MOD_SOURCE_README_FILE "${PROJECT_SOURCE_DIR}/readme.md")
-set(MOD_GAME_DIR_README_FILE "${MOD_GAME_DIR}/red4ext/plugins/${CMAKE_PROJECT_NAME}/readme.md")
-
-add_custom_command(
-  OUTPUT ${MOD_GAME_DIR_README_FILE}
-  DEPENDS ${MOD_SOURCE_README_FILE}
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${MOD_SOURCE_README_FILE} ${MOD_GAME_DIR_README_FILE}
-)
-
-add_custom_target(readme DEPENDS ${MOD_GAME_DIR_README_FILE})
-
-# Full mod
-
-add_custom_target(${CMAKE_PROJECT_NAME}
-  DEPENDS ${CMAKE_PROJECT_NAME}.dll readme license
-  )
-
-# Install
-
-file(GLOB MOD_GAME_DIR_FILES ${MOD_GAME_DIR}/*)
-
-install(DIRECTORY ${MOD_GAME_DIR_FILES}
-  DESTINATION ${CYBERPUNK_2077_GAME_DIR})
-
-# Release
-
-set(MOD_ZIP_FILE ${CMAKE_SOURCE_DIR}/${CMAKE_PROJECT_NAME}_v${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}.zip)
-
-add_custom_target(release
-  COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${MOD_ZIP_FILE}" --format=zip .
-  WORKING_DIRECTORY ${MOD_GAME_DIR}
-  DEPENDS ${CMAKE_PROJECT_NAME}
-  COMMENT "Zipping game_dir for v${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
+configure_uninstall()
+configure_release(${MOD_SLUG}_${MOD_VERSION_STR}.zip)
+configure_install()
