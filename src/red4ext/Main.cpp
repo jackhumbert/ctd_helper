@@ -5,7 +5,6 @@
 #include <spdlog/spdlog.h>
 #include "Utils.hpp"
 #include "ScriptHost.hpp"
-#include "Version.hpp"
 #include "Addresses.hpp"
 #include "Registrar.hpp"
 
@@ -243,7 +242,7 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::
     // is not initalized yet.
 
     Utils::CreateLogger();
-    spdlog::info("Starting up CTD Helper v{}.{}.{}", MOD_VER_MAJOR, MOD_VER_MINOR, MOD_VER_PATCH);
+    spdlog::info("Starting up CTD Helper v{}.{}.{}", MOD_VERSION_MAJOR, MOD_VERSION_MINOR, MOD_VERSION_PATCH);
 
     auto ptr = GetModuleHandle(nullptr);
     spdlog::info("Base address: {}", fmt::ptr(ptr));
@@ -269,7 +268,7 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::
 RED4EXT_C_EXPORT void RED4EXT_CALL Query(RED4ext::PluginInfo *aInfo) {
   aInfo->name = L"CTD Helper";
   aInfo->author = L"Jack Humbert";
-  aInfo->version = RED4EXT_SEMVER(MOD_VER_MAJOR, MOD_VER_MINOR, MOD_VER_PATCH);
+  aInfo->version = RED4EXT_SEMVER(MOD_VERSION_MAJOR, MOD_VERSION_MINOR, MOD_VERSION_PATCH);
   aInfo->runtime = RED4EXT_RUNTIME_LATEST;
   aInfo->sdk = RED4EXT_SDK_LATEST;
 }
