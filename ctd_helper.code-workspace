@@ -5,6 +5,7 @@
 		}
 	],
 	"settings": {
+    "window.title": "CTD Helper",
 		"files.associations": {
 			"algorithm": "cpp",
 			"array": "cpp",

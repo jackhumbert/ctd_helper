@@ -1,5 +1,7 @@
 #include <RED4ext/RED4ext.hpp>
 #include <RED4ext/Relocation.hpp>
+#include <filesystem>
+#include <fstream>
 #include <queue>
 #include <map>
 #include <spdlog/spdlog.h>
@@ -153,66 +155,173 @@ REGISTER_HOOK(void __fastcall, CallFunc, RED4ext::IScriptable *context, RED4ext:
 void __fastcall CrashFunc(uint8_t a1, uintptr_t a2);
 
 REGISTER_HOOK(void __fastcall, CrashFunc, uint8_t a1, uintptr_t a2) {
-  spdlog::error("Crash! Last called functions in each thread:");
+  // for (auto &queue : callQueues) {
+  //   auto level = 0;
+  //   std::deque<uint64_t> stack;
+  //   auto crashing = lastThread == queue.first;
+  //   spdlog::error("Thread hash: {0}{1}", queue.first, crashing ? " LAST EXECUTED":"");
+  //   uint64_t last = 0;
+  //   for (auto i = 0; queue.second.size(); i++) {
+  //     auto call = queue.second.front();
+  //     auto filename = "<no file>";
+  //     auto scriptFile = ScriptHost::Get()->files.values[call.fileIndex];
+  //     if (scriptFile) {
+  //       filename = scriptFile->filename.c_str();
+  //     }
+  //     if (call.parentFullName) {
+  //       uint64_t parent = call.parentFullName;
+
+  //       if (last == 0) {
+  //         stack.emplace_front(parent);
+  //         spdlog::error("  Func:   {}", call.GetParentFunc());
+  //         spdlog::error("  Class:  {}", call.parentCls->GetName().ToString());
+  //       } else {
+  //         if (parent == last) {
+  //           stack.emplace_front(parent);
+  //         } else if (stack.front() != parent) {
+  //           stack.pop_front();
+  //           if (stack.size() == 0 || (stack.size() > 0 && stack.front() != parent)) {
+  //             stack.emplace_front(parent);
+  //             spdlog::error("  Func:   {}", call.GetParentFunc());
+  //             spdlog::error("  Class:  {}", call.parentCls->GetName().ToString());
+  //           }
+  //         }
+  //       }
+
+
+
+  //       //if (stack.size() > 0 && parent != stack.front()) {
+  //       //  if (parent != last) {
+  //       //    if (stack.size() > 0 || (stack.size() > 0 && stack.front() != last)) {
+  //       //      stack.pop_front();
+  //       //    }
+  //       //  }
+  //       //} else {
+  //       //  stack.emplace_front(parent);
+  //       //  spdlog::error("{}", call.GetParentFunc());
+  //       //  spdlog::error("Class:  {}", call.parentCls->GetName().ToString());
+  //       //}
+  //     }
+  //     last = call.fullName;
+  //     auto index = fmt::format("{}", MAX_CALLS - i - 1);
+  //     spdlog::error(" {:>{}} Func:   {}", index == "0" ? ">" : index, stack.size() * 2, call.GetFunc());
+  //     if (call.cls) {
+  //       spdlog::error(" {:>{}} Class:  {}", " ", stack.size() * 2, call.cls->GetName().ToString());
+  //     }
+  //     if (call.fileIndex != 0 || call.unk04 != 0) {
+  //       spdlog::error(" {:>{}} Source: {}:{}", " ", stack.size() * 2, filename, call.unk04);
+  //     }
+  //     queue.second.pop_front();
+  //   }
+  // }
+
+  time_t     now = time(0);
+  struct tm  tstruct;
+  char       buf[80];
+  tstruct = *localtime(&now);
+  strftime(buf, sizeof(buf), "%Y-%m-%d_%H-%M-%S.html", &tstruct);
+
+  spdlog::error("Crash! Check {} for details", buf);
+  auto ctd_helper_dir = Utils::GetRootDir() / "red4ext" / "logs" / "ctd_helper";
+  std::filesystem::create_directories(ctd_helper_dir);
+  std::ofstream htmlLog;
+  htmlLog.open(ctd_helper_dir / buf);
+  htmlLog << R"(<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="highlightjs/styles/default.min.css">
+<link rel="stylesheet" href="style.css">
+<script src="highlightjs/highlight.min.js"></script>
+<script src="highlightjs/line-numbers.min.js"></script>
+<script>
+  hljs.highlightAll();
+  hljs.initLineNumbersOnLoad();
+</script></head>
+<body>
+)";
+
+  std::unordered_map<std::filesystem::path, std::vector<std::string>> files;
+
+  auto rtti = RED4ext::CRTTISystem::Get();
   for (auto &queue : callQueues) {
     auto level = 0;
     std::deque<uint64_t> stack;
     auto crashing = lastThread == queue.first;
-    spdlog::error("Thread hash: {0}{1}", queue.first, crashing ? " LAST EXECUTED":"");
+    htmlLog << fmt::format("<div class='thread'><h1>{0}{1}</h1>", queue.first, crashing ? " LAST EXECUTED":"") << std::endl;
     uint64_t last = 0;
     for (auto i = 0; queue.second.size(); i++) {
       auto call = queue.second.front();
-      auto filename = "<no file>";
-      auto scriptFile = ScriptHost::Get()->files.values[call.fileIndex];
-      if (scriptFile) {
-        filename = scriptFile->filename.c_str();
-      }
       if (call.parentFullName) {
         uint64_t parent = call.parentFullName;
 
         if (last == 0) {
           stack.emplace_front(parent);
-          spdlog::error("  Func:   {}", call.GetParentFunc());
-          spdlog::error("  Class:  {}", call.parentCls->GetName().ToString());
+          htmlLog << fmt::format("<div class='call'><h2>{}::{}</h2>", rtti->ConvertNativeToScriptName(call.parentCls->GetName()).ToString(), call.GetParentFunc()) << std::endl;
         } else {
           if (parent == last) {
             stack.emplace_front(parent);
           } else if (stack.front() != parent) {
+              htmlLog << "</div >" << std::endl;
             stack.pop_front();
             if (stack.size() == 0 || (stack.size() > 0 && stack.front() != parent)) {
               stack.emplace_front(parent);
-              spdlog::error("  Func:   {}", call.GetParentFunc());
-              spdlog::error("  Class:  {}", call.parentCls->GetName().ToString());
+              htmlLog << fmt::format("<div class='call'><h2>{}::{}</h2>", rtti->ConvertNativeToScriptName(call.parentCls->GetName()).ToString(), call.GetParentFunc()) << std::endl;
             }
           }
         }
-
-
-
-        //if (stack.size() > 0 && parent != stack.front()) {
-        //  if (parent != last) {
-        //    if (stack.size() > 0 || (stack.size() > 0 && stack.front() != last)) {
-        //      stack.pop_front();
-        //    }
-        //  }
-        //} else {
-        //  stack.emplace_front(parent);
-        //  spdlog::error("{}", call.GetParentFunc());
-        //  spdlog::error("Class:  {}", call.parentCls->GetName().ToString());
-        //}
       }
       last = call.fullName;
-      auto index = fmt::format("{}", MAX_CALLS - i - 1);
-      spdlog::error(" {:>{}} Func:   {}", index == "0" ? ">" : index, stack.size() * 2, call.GetFunc());
       if (call.cls) {
-        spdlog::error(" {:>{}} Class:  {}", " ", stack.size() * 2, call.cls->GetName().ToString());
+        htmlLog << fmt::format("<div class='call'><h2>{}::{}</h2>", rtti->ConvertNativeToScriptName(call.cls->GetName()).ToString(), call.GetFunc()) << std::endl;
+      } else {
+        htmlLog << fmt::format("<div class='call'><h2>{}</h2>", call.GetFunc()) << std::endl;
       }
-      if (call.fileIndex != 0 && call.unk04 != 0) {
-        spdlog::error(" {:>{}} Source: {}:{}", " ", stack.size() * 2, filename, call.unk04);
+      if (call.fileIndex != 0 || call.unk04 != 0) {
+        auto scriptFile = *ScriptHost::Get()->files.Get(call.fileIndex);
+        if (scriptFile) {
+          auto path = std::filesystem::path(scriptFile->filename.c_str());
+          if(path.is_relative()) {
+            path = Utils::GetRootDir() / "tools" / "redmod" / "scripts" / path;
+          }
+          htmlLog << fmt::format("<div class='source'>{}:{}", path.string().c_str(), call.unk04, scriptFile->hash1) << std::endl;
+          if (std::filesystem::exists(path)) {
+            if (!files.contains(path)) {
+              std::ifstream file(path);
+              std::string line;
+              while (std::getline(file, line)) {
+                files[path].emplace_back(line);
+              }
+              file.close();
+            }
+            auto line_index = call.unk04 - 1;
+            if (files[path].size() > line_index) {
+              htmlLog << fmt::format("<pre><code class='language-swift' data-ln-start-from='{}'>", call.unk04 - 2);
+              for (int i = -2; i <= 2; i++) {
+                if (files[path].size() > (line_index + i))
+                  htmlLog << fmt::format("{}", files[path][line_index + i]) << std::endl;
+              }
+              htmlLog << fmt::format("</code></pre>") << std::endl;
+            } else {
+              spdlog::warn("Line number exceded file: {}:{}", path.string().c_str(), call.unk04);
+            }
+          } else {
+            spdlog::warn("Could not locate file: {}", path.string().c_str());
+          }
+          htmlLog << "</div>" << std::endl;
+        }
       }
+      htmlLog << "</div>" << std::endl;
       queue.second.pop_front();
     }
+    htmlLog << "</div>" << std::endl;
   }
+
+  htmlLog << R"(</body>
+</html>)";
+  htmlLog.close();
+
+  std::filesystem::copy_file(ctd_helper_dir / buf, ctd_helper_dir / "latest.html", std::filesystem::copy_options::overwrite_existing);
+
   CrashFunc_Original(a1, a2);
 }
 

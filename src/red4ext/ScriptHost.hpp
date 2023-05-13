@@ -2,8 +2,12 @@
 #include "Addresses.hpp"
 
 struct ScriptFile {
-  RED4ext::CName name;
+  uint32_t hash1;
+  uint32_t hash2;
   RED4ext::CString filename;
+  RED4ext::DynArray<void*> unk28;
+  RED4ext::DynArray<void*> unk38;
+  uint32_t unk48;
 };
 
 enum EBreakpointState : unsigned __int8 {
