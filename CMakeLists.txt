@@ -17,6 +17,28 @@ configure_mod(
   LICENSE "Licensed under the MIT license. See the license.md in the root project for details."
 )
 
+function(make_includable input_file output_file)
+  file(READ ${input_file} content)
+  set(delim "for_c++_include")
+  string(LENGTH "${content}" content_length)
+  message(STATUS "${input_file}: ${content_length}")
+  if (${content_length} GREATER 16380)
+    string(SUBSTRING "${content}" 0 16380 content_0)
+    string(SUBSTRING "${content}" 16380 16380 content_1)
+    set(content_0 "R\"${delim}(${content_0})${delim}\"\n")
+    set(content_1 "R\"${delim}(${content_1})${delim}\"\n")
+    file(WRITE ${output_file} "${content_0}")
+    file(APPEND ${output_file} "${content_1}")
+  else()
+    set(content "R\"${delim}(${content})${delim}\"\n")
+    file(WRITE ${output_file} "${content}")
+  endif()
+endfunction(make_includable)
+
+make_includable(src/red4ext/style.css src/red4ext/style.css.frag)
+make_includable(src/red4ext/highlight.min.js src/red4ext/highlight.min.js.frag)
+make_includable(src/red4ext/line-numbers.min.js src/red4ext/line-numbers.min.js.frag)
+
 find_program(ZOLTAN_CLANG_EXE NAMES zoltan-clang.exe PATHS "${MOD_TOOLS_DIR}" CACHE)
 find_program(CYBERPUNK_2077_EXE NAMES Cyberpunk2077.exe PATHS "${CYBERPUNK_2077_GAME_DIR}/bin/x64" CACHE DOC "Cyberpunk2077.exe Executable File")
 

@@ -4,14 +4,20 @@
 #define ZOLTAN_EXPAND_THEN_STRINGISE(N) ZOLTAN_STRINGISE(N)
 #define __LINE_STR__ ZOLTAN_EXPAND_THEN_STRINGISE(__LINE__)
 
-#ifndef   CallFunc_Addr
-  #define CallFunc_Addr 0x288640
+#ifndef   Breakpoint_Addr
+  #define Breakpoint_Addr 0x287B30
 #endif
 #ifndef   CrashFunc_Addr
   #define CrashFunc_Addr 0x2BD0680
 #endif
 #ifndef   DebugPrint_Addr
   #define DebugPrint_Addr 0xA97C60
+#endif
+#ifndef   InvokeStatic_Addr
+  #define InvokeStatic_Addr 0x288640
+#endif
+#ifndef   InvokeVirtual_Addr
+  #define InvokeVirtual_Addr 0x289F20
 #endif
 #ifndef   BaseStream_ReadWriteHandleID_Addr
   #define BaseStream_ReadWriteHandleID_Addr 0x720670

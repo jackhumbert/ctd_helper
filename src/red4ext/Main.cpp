@@ -5,41 +5,78 @@
 #include <queue>
 #include <map>
 #include <spdlog/spdlog.h>
+#include <thread>
+#include "RED4ext/ISerializable.hpp"
+#include "RED4ext/InstanceType.hpp"
+#include "RED4ext/RTTISystem.hpp"
 #include "Utils.hpp"
 #include "ScriptHost.hpp"
 #include "Addresses.hpp"
 #include "Registrar.hpp"
+#include "Template.hpp"
 
-#define MAX_CALLS 8
+#define MAX_CALLS 16
 
-struct Call {
-  RED4ext::CClass *cls;
-  RED4ext::CName fullName;
-  RED4ext::CName shortName;
-  RED4ext::CClass *parentCls;
-  RED4ext::CName parentFullName;
-  RED4ext::CName parentShortName;
-  std::time_t callTime;
-  uint32_t fileIndex;
-  uint32_t unk04;
+// struct Call {
+//   RED4ext::CClass *cls;
+//   RED4ext::CName fullName;
+//   RED4ext::CName shortName;
+//   RED4ext::CClass *parentCls;
+//   RED4ext::CName parentFullName;
+//   RED4ext::CName parentShortName;
+//   std::time_t callTime;
+//   uint32_t fileIndex;
+//   uint32_t unk04;
 
-  std::string GetFunc() {
-    std::string fullName(this->fullName.ToString());
-    if (fullName.find(";") != -1) {
-      fullName.replace(fullName.find(";"), 1, "(");
-      while (fullName.find(";") != -1) {
-        fullName.replace(fullName.find(";"), 1, ", ");
-      }
-    } else {
-      fullName.append("(");
-    }
-    fullName.append(")");
+//   std::string GetFuncName() {
+//     std::string fullName(this->fullName.ToString());
+//     if (fullName.find(";") != -1) {
+//       fullName.replace(fullName.find(";"), 1, "(");
+//       while (fullName.find(";") != -1) {
+//         fullName.replace(fullName.find(";"), 1, ", ");
+//       }
+//     } else {
+//       fullName.append("(");
+//     }
+//     fullName.append(")");
 
-    return fullName;
+//     return fullName;
+//   }
+
+//   std::string GetParentFuncName() {
+//     std::string fullName(this->parentFullName.ToString());
+//     if (fullName.find(";") != -1) {
+//       fullName.replace(fullName.find(";"), 1, "(");
+//       while (fullName.find(";") != -1) {
+//         fullName.replace(fullName.find(";"), 1, ", ");
+//       }
+//     } else {
+//       fullName.append("(");
+//     }
+//     fullName.append(")");
+
+//     return fullName;
+//   }
+// };
+
+struct BaseFunction {
+  uint8_t raw[sizeof(RED4ext::CBaseFunction)];
+};
+
+struct FuncCall {
+  BaseFunction func;
+  RED4ext::CClass *type;
+  std::vector<FuncCall> children;
+  RED4ext::CClass *contextType;
+  RED4ext::IScriptable * context;
+  RED4ext::CString contextString;
+
+  RED4ext::CBaseFunction * get_func() {
+    return reinterpret_cast<RED4ext::CBaseFunction*>(&this->func);
   }
-
-  std::string GetParentFunc() {
-    std::string fullName(this->parentFullName.ToString());
+  
+  std::string GetFuncName() {
+    std::string fullName(this->get_func()->fullName.ToString());
     if (fullName.find(";") != -1) {
       fullName.replace(fullName.find(";"), 1, "(");
       while (fullName.find(";") != -1) {
@@ -54,9 +91,17 @@ struct Call {
   }
 };
 
+struct CallPair {
+  FuncCall self;
+  FuncCall parent;
+  RED4ext::WeakHandle<RED4ext::ISerializable> context;
+  bool cameBack = false;
+};
+
 std::mutex queueLock;
-std::map<size_t, std::deque<Call>> callQueues;
-size_t lastThread;
+// std::map<std::string, std::deque<Call>> callQueues;
+std::map<std::string, std::deque<CallPair>> funcCallQueues;
+std::string lastThread;
 
 bool scriptLinkingError = false;
 
@@ -102,48 +147,198 @@ REGISTER_HOOK(uintptr_t __fastcall, ShowMessageBox, char a1, char a2) {
   }
 }
 
+CallPair* Invoke(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
+  auto func = *reinterpret_cast<RED4ext::CBaseFunction **>(stackFrame->code + 4);
+  // auto thread = std::this_thread::get_id();
+  // auto hash = std::hash<std::thread::id>()(thread);
+  wchar_t * thread_name;
+  HRESULT hr = GetThreadDescription(GetCurrentThread(), &thread_name);
+  CallPair * pair_p = nullptr;
+  if (func) {
+    auto call = CallPair();
+    call.self.func = *reinterpret_cast<BaseFunction*>(func);
+    call.self.type = func->GetParent();
+    if(stackFrame->func) {
+      call.parent.func = *reinterpret_cast<BaseFunction*>(stackFrame->func);
+      call.parent.type = stackFrame->func->GetParent();
+    }
+    if (context && context->ref.instance == context) {
+      call.self.contextType = call.parent.contextType = context->GetType();
+      // call.context.instance = context;
+      // call.context.refCount = context->ref.refCount;
+      if (call.self.contextType) {
+        call.self.contextType->ToString(context, call.self.contextString);
+        call.parent.contextType->ToString(context, call.parent.contextString);
+      }
+    }
+    std::wstring ws(thread_name);
+    lastThread = std::string(ws.begin(), ws.end());
+
+    std::lock_guard<std::mutex> lock(queueLock);
+    if (!funcCallQueues.contains(lastThread)) {
+      funcCallQueues.insert_or_assign(lastThread, std::deque<CallPair>());
+    }
+    auto queue = funcCallQueues.find(lastThread);
+    pair_p = &queue->second.emplace_back(call);
+    while (queue->second.size() > MAX_CALLS) {
+      auto old = queue->second.front();
+      if (old.context && old.context.refCount) {
+        old.context.refCount->DecRef();
+      }
+      queue->second.pop_front();
+    }
+  }
+  return pair_p;
+}
+/// @pattern 48 8B 02 48 83 C0 13 48 89 02 44 0F B6 10 48 FF C0 48 89 02 41 8B C2 4C 8D 15 ? ? ? 03 49 FF
+void __fastcall Breakpoint(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4);
+
+REGISTER_HOOK(void __fastcall, Breakpoint, RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
+  spdlog::info("Redscript breakpoint encountered");
+  __debugbreak();
+  Breakpoint_Original(context, stackFrame, a3, a4);
+}
+
 // 48 83 EC 40 48 8B 02 4C 8B F2 44 0F B7 7A 60
 // 1.52 RVA: 0x27A410 / 2597904
 // 1.6  RVA: 0x27E1E0 / 2613728
 // 1.61 RVA: 0x27E790
 // 1.61hf RVA: 0x27E810
 /// @pattern 48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 54 41 55 41 56 41 57 48 83 EC 40 48 8B 02 4C
-void __fastcall CallFunc(RED4ext::IScriptable *, RED4ext::CStackFrame *stackFrame, uintptr_t, uintptr_t);
+void __fastcall InvokeStatic(RED4ext::IScriptable *, RED4ext::CStackFrame *stackFrame, uintptr_t, uintptr_t);
 
-REGISTER_HOOK(void __fastcall, CallFunc, RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
-  auto func = *reinterpret_cast<RED4ext::CBaseFunction **>(stackFrame->code + 4);
-  auto thread = std::this_thread::get_id();
-  auto hash = std::hash<std::thread::id>()(thread);
-  if (func) {
-    auto call = Call();
-    call.cls = func->GetParent();
-    if (context && context->ref.instance == context) {
-      call.parentCls = context->GetType();
-    }
-    call.fullName = func->fullName;
-    call.shortName = func->shortName;
-    if (stackFrame->func) {
-      auto parent = reinterpret_cast<RED4ext::CBaseFunction *>(stackFrame->func);
-      call.parentFullName = parent->fullName;
-      call.parentShortName = parent->shortName;
-      call.fileIndex = stackFrame->func->bytecode.fileIndex;
-      call.unk04 = stackFrame->func->bytecode.unk04;
-    }
-    call.callTime = std::time(0);
-
-    lastThread = hash;
-
-    std::lock_guard<std::mutex> lock(queueLock);
-    if (!callQueues.contains(hash)) {
-      callQueues.insert_or_assign(hash, std::deque<Call>());
-    }
-    auto queue = callQueues.find(hash);
-    queue->second.emplace_back(call);
-    while (queue->second.size() > MAX_CALLS) {
-      queue->second.pop_front();
-    }
+REGISTER_HOOK(void __fastcall, InvokeStatic, RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
+  auto pair_p = Invoke(context, stackFrame, a3, a4);
+  InvokeStatic_Original(context, stackFrame, a3, a4);
+  if (pair_p) {
+    pair_p->cameBack = true;
   }
-  CallFunc_Original(context, stackFrame, a3, a4);
+}
+
+/// @pattern 48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 54 41 55 41 56 41 57 48 83 EC 40 48 8B 02 48
+void __fastcall InvokeVirtual(RED4ext::IScriptable *, RED4ext::CStackFrame *stackFrame, uintptr_t, uintptr_t);
+
+REGISTER_HOOK(void __fastcall, InvokeVirtual, RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
+  auto pair_p = Invoke(context, stackFrame, a3, a4);
+  InvokeStatic_Original(context, stackFrame, a3, a4);
+  if (pair_p) {
+    pair_p->cameBack = true;
+  }
+}
+
+std::unordered_map<std::filesystem::path, std::vector<std::string>> files;
+
+void encode_html(std::string& data) {
+    std::string buffer;
+    buffer.reserve(data.size());
+    for(size_t pos = 0; pos != data.size(); ++pos) {
+        switch(data[pos]) {
+            case '&':  buffer.append("&amp;");       break;
+            case '\"': buffer.append("&quot;");      break;
+            case '\'': buffer.append("&apos;");      break;
+            case '<':  buffer.append("&lt;");        break;
+            case '>':  buffer.append("&gt;");        break;
+            default:   buffer.append(&data[pos], 1); break;
+        }
+    }
+    data.swap(buffer);
+}
+
+#define LINES_BEFORE_TO_PRINT 2
+#define LINES_AFTER_TO_PRINT 5
+
+// void print_source(std::ofstream& htmlLog, uint32_t file_idx, uint32_t line_idx) {
+void print_source(std::ofstream& htmlLog, uint32_t file_idx, uint32_t line_idx, std::string func) {
+  auto scriptFile = *ScriptHost::Get()->files.Get(file_idx);
+  if (scriptFile) {
+    auto path = std::filesystem::path(scriptFile->filename.c_str());
+    auto is_red = false;
+    if(path.is_relative()) {
+      path = Utils::GetRootDir() / "tools" / "redmod" / "scripts" / path;
+      is_red = true;
+    }
+    auto rel_path = std::filesystem::relative(path, Utils::GetRootDir());
+    htmlLog << "<div class='source'>" << std::endl;
+    if (std::filesystem::exists(path)) {
+      if (!files.contains(path)) {
+        std::ifstream file(path);
+        std::string line;
+        while (std::getline(file, line)) {
+          files[path].emplace_back(line);
+        }
+        file.close();
+      }
+      if (is_red) {
+        for (int idx = 0; idx < files[path].size(); ++idx) {
+          if (files[path][idx].find(func.c_str()) != std::string::npos) {
+            line_idx = idx;
+            break;
+          }
+        }
+      }
+      auto line_index = line_idx;
+      htmlLog << fmt::format("<a href='{}'>{}:{}</a>", path.string().c_str(), rel_path.string().c_str(), line_idx) << std::endl;
+      if (files[path].size() > line_index) {
+        htmlLog << fmt::format("<pre><code class='language-swift' data-ln-start-from='{}'>", line_idx - LINES_BEFORE_TO_PRINT);
+        for (int i = -LINES_BEFORE_TO_PRINT; i <= LINES_AFTER_TO_PRINT; i++) {
+          if (files[path].size() > (line_index + i)) {
+            auto code = files[path][line_index + i];
+            encode_html(code);
+            htmlLog << code << std::endl;
+          }
+        }
+        htmlLog << fmt::format("</code></pre>") << std::endl;
+      } else {
+        spdlog::warn("Line number exceded file: {}:{}", path.string().c_str(), line_idx + 1);
+      }
+    } else {
+      htmlLog << fmt::format("<a href='{}'>{}:{}</a>", path.string().c_str(), rel_path.string().c_str(), line_idx) << std::endl;
+      spdlog::warn("Could not locate file: {}", path.string().c_str());
+    }
+    htmlLog << "</div>" << std::endl;
+  }
+}
+
+FuncCall * FindFunc(std::vector<FuncCall>& map, RED4ext::CName key) {
+  if (auto it = find_if(map.begin(), map.end(), [&key](FuncCall& obj) {
+    return obj.get_func()->fullName == key;
+  }); it != map.end()) {
+    return it._Ptr;
+  } else {
+    for (auto& value : map) {
+      if (auto func = FindFunc(value.children, key); func != nullptr) {
+        return func;
+      }
+    }
+    return nullptr;
+  }
+}
+
+auto rtti = RED4ext::CRTTISystem::Get();
+
+void PrintCall(std::ofstream& htmlLog, FuncCall& call) {
+  htmlLog << "<div class='call'>" << std::endl;
+  if (call.contextString.Length()) {
+    htmlLog << "<details>\n<summary>";
+  }
+  htmlLog << "<span class='call-name'>";
+  if (call.type) {
+    htmlLog << fmt::format("{}::", rtti->ConvertNativeToScriptName(call.type->GetName()).ToString());
+  }
+  htmlLog << fmt::format("{}", call.GetFuncName());
+  htmlLog << "</span>" << std::endl;
+  if (call.contextString.Length()) {
+    htmlLog << "</summary>" << std::endl;
+    htmlLog << fmt::format("<pre><code>{}</code></pre>", call.contextString.c_str()) << std::endl;
+    htmlLog << "</details>" << std::endl;
+  }
+  if (call.get_func()->bytecode.fileIndex != 0 || call.get_func()->bytecode.unk04 != 0) {
+    print_source(htmlLog, call.get_func()->bytecode.fileIndex, call.get_func()->bytecode.unk04, call.GetFuncName());
+  }
+  for (auto& child : call.children) {
+    PrintCall(htmlLog, child);
+  }
+  htmlLog << "</div>" << std::endl;
 }
 
 // 48 8D 68 A1 48 81 EC A0 00 00 00 0F B6 F1
@@ -155,65 +350,6 @@ REGISTER_HOOK(void __fastcall, CallFunc, RED4ext::IScriptable *context, RED4ext:
 void __fastcall CrashFunc(uint8_t a1, uintptr_t a2);
 
 REGISTER_HOOK(void __fastcall, CrashFunc, uint8_t a1, uintptr_t a2) {
-  // for (auto &queue : callQueues) {
-  //   auto level = 0;
-  //   std::deque<uint64_t> stack;
-  //   auto crashing = lastThread == queue.first;
-  //   spdlog::error("Thread hash: {0}{1}", queue.first, crashing ? " LAST EXECUTED":"");
-  //   uint64_t last = 0;
-  //   for (auto i = 0; queue.second.size(); i++) {
-  //     auto call = queue.second.front();
-  //     auto filename = "<no file>";
-  //     auto scriptFile = ScriptHost::Get()->files.values[call.fileIndex];
-  //     if (scriptFile) {
-  //       filename = scriptFile->filename.c_str();
-  //     }
-  //     if (call.parentFullName) {
-  //       uint64_t parent = call.parentFullName;
-
-  //       if (last == 0) {
-  //         stack.emplace_front(parent);
-  //         spdlog::error("  Func:   {}", call.GetParentFunc());
-  //         spdlog::error("  Class:  {}", call.parentCls->GetName().ToString());
-  //       } else {
-  //         if (parent == last) {
-  //           stack.emplace_front(parent);
-  //         } else if (stack.front() != parent) {
-  //           stack.pop_front();
-  //           if (stack.size() == 0 || (stack.size() > 0 && stack.front() != parent)) {
-  //             stack.emplace_front(parent);
-  //             spdlog::error("  Func:   {}", call.GetParentFunc());
-  //             spdlog::error("  Class:  {}", call.parentCls->GetName().ToString());
-  //           }
-  //         }
-  //       }
-
-
-
-  //       //if (stack.size() > 0 && parent != stack.front()) {
-  //       //  if (parent != last) {
-  //       //    if (stack.size() > 0 || (stack.size() > 0 && stack.front() != last)) {
-  //       //      stack.pop_front();
-  //       //    }
-  //       //  }
-  //       //} else {
-  //       //  stack.emplace_front(parent);
-  //       //  spdlog::error("{}", call.GetParentFunc());
-  //       //  spdlog::error("Class:  {}", call.parentCls->GetName().ToString());
-  //       //}
-  //     }
-  //     last = call.fullName;
-  //     auto index = fmt::format("{}", MAX_CALLS - i - 1);
-  //     spdlog::error(" {:>{}} Func:   {}", index == "0" ? ">" : index, stack.size() * 2, call.GetFunc());
-  //     if (call.cls) {
-  //       spdlog::error(" {:>{}} Class:  {}", " ", stack.size() * 2, call.cls->GetName().ToString());
-  //     }
-  //     if (call.fileIndex != 0 || call.unk04 != 0) {
-  //       spdlog::error(" {:>{}} Source: {}:{}", " ", stack.size() * 2, filename, call.unk04);
-  //     }
-  //     queue.second.pop_front();
-  //   }
-  // }
 
   time_t     now = time(0);
   struct tm  tstruct;
@@ -226,92 +362,41 @@ REGISTER_HOOK(void __fastcall, CrashFunc, uint8_t a1, uintptr_t a2) {
   std::filesystem::create_directories(ctd_helper_dir);
   std::ofstream htmlLog;
   htmlLog.open(ctd_helper_dir / buf);
-  htmlLog << R"(<!DOCTYPE html>
-<html>
-<head>
-<link rel="stylesheet" href="highlightjs/styles/default.min.css">
-<link rel="stylesheet" href="style.css">
-<script src="highlightjs/highlight.min.js"></script>
-<script src="highlightjs/line-numbers.min.js"></script>
-<script>
-  hljs.highlightAll();
-  hljs.initLineNumbersOnLoad();
-</script></head>
-<body>
-)";
+  htmlLog << CTD_HELPER_HEADER;
 
-  std::unordered_map<std::filesystem::path, std::vector<std::string>> files;
+  std::map<std::string, std::vector<FuncCall>> orgd;
 
-  auto rtti = RED4ext::CRTTISystem::Get();
-  for (auto &queue : callQueues) {
+  for (auto &queue : funcCallQueues) {
+    auto thread = queue.first;
+    for (auto i = 0; queue.second.size(); i++) {
+      auto call = queue.second.front();
+      if (!call.cameBack) { // || (call.context.instance && call.context.refCount)) {
+          call.self.type->ToString(call.context.instance, call.self.contextString);
+          call.parent.contextString = call.self.contextString;
+      }
+      if (orgd[thread].empty()) {
+        call.parent.children.emplace_back(call.self);
+        orgd[thread].emplace_back(call.parent);
+      } else {
+        if (auto func = FindFunc(orgd[thread], call.parent.get_func()->fullName); func != nullptr) {
+          func->children.emplace_back(call.self);
+        } else {
+          call.parent.children.emplace_back(call.self);
+          orgd[thread].emplace_back(call.parent);
+        }
+      }
+      queue.second.pop_front();
+    }
+  }
+
+  for (auto &queue : orgd) {
     auto level = 0;
     std::deque<uint64_t> stack;
     auto crashing = lastThread == queue.first;
     htmlLog << fmt::format("<div class='thread'><h1>{0}{1}</h1>", queue.first, crashing ? " LAST EXECUTED":"") << std::endl;
     uint64_t last = 0;
-    for (auto i = 0; queue.second.size(); i++) {
-      auto call = queue.second.front();
-      if (call.parentFullName) {
-        uint64_t parent = call.parentFullName;
-
-        if (last == 0) {
-          stack.emplace_front(parent);
-          htmlLog << fmt::format("<div class='call'><h2>{}::{}</h2>", rtti->ConvertNativeToScriptName(call.parentCls->GetName()).ToString(), call.GetParentFunc()) << std::endl;
-        } else {
-          if (parent == last) {
-            stack.emplace_front(parent);
-          } else if (stack.front() != parent) {
-              htmlLog << "</div >" << std::endl;
-            stack.pop_front();
-            if (stack.size() == 0 || (stack.size() > 0 && stack.front() != parent)) {
-              stack.emplace_front(parent);
-              htmlLog << fmt::format("<div class='call'><h2>{}::{}</h2>", rtti->ConvertNativeToScriptName(call.parentCls->GetName()).ToString(), call.GetParentFunc()) << std::endl;
-            }
-          }
-        }
-      }
-      last = call.fullName;
-      if (call.cls) {
-        htmlLog << fmt::format("<div class='call'><h2>{}::{}</h2>", rtti->ConvertNativeToScriptName(call.cls->GetName()).ToString(), call.GetFunc()) << std::endl;
-      } else {
-        htmlLog << fmt::format("<div class='call'><h2>{}</h2>", call.GetFunc()) << std::endl;
-      }
-      if (call.fileIndex != 0 || call.unk04 != 0) {
-        auto scriptFile = *ScriptHost::Get()->files.Get(call.fileIndex);
-        if (scriptFile) {
-          auto path = std::filesystem::path(scriptFile->filename.c_str());
-          if(path.is_relative()) {
-            path = Utils::GetRootDir() / "tools" / "redmod" / "scripts" / path;
-          }
-          htmlLog << fmt::format("<div class='source'>{}:{}", path.string().c_str(), call.unk04, scriptFile->hash1) << std::endl;
-          if (std::filesystem::exists(path)) {
-            if (!files.contains(path)) {
-              std::ifstream file(path);
-              std::string line;
-              while (std::getline(file, line)) {
-                files[path].emplace_back(line);
-              }
-              file.close();
-            }
-            auto line_index = call.unk04 - 1;
-            if (files[path].size() > line_index) {
-              htmlLog << fmt::format("<pre><code class='language-swift' data-ln-start-from='{}'>", call.unk04 - 2);
-              for (int i = -2; i <= 2; i++) {
-                if (files[path].size() > (line_index + i))
-                  htmlLog << fmt::format("{}", files[path][line_index + i]) << std::endl;
-              }
-              htmlLog << fmt::format("</code></pre>") << std::endl;
-            } else {
-              spdlog::warn("Line number exceded file: {}:{}", path.string().c_str(), call.unk04);
-            }
-          } else {
-            spdlog::warn("Could not locate file: {}", path.string().c_str());
-          }
-          htmlLog << "</div>" << std::endl;
-        }
-      }
-      htmlLog << "</div>" << std::endl;
-      queue.second.pop_front();
+    for (auto& call : queue.second) {
+      PrintCall(htmlLog, call);
     }
     htmlLog << "</div>" << std::endl;
   }
