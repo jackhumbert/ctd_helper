@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(ctd_helper VERSION 0.1.2)
+project(ctd_helper VERSION 0.1.3)
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/deps/cyberpunk_cmake")
