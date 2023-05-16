@@ -46,7 +46,9 @@ resources/install_log.xml
 prereqs.redscripts
 *.zip
 game_dir/
-game_dir_prereqs/
+game_dir_requirements/
+game_dir_debug/
+game_dir_requirements_debug/
 
 Cyberpunk2077.exe*
 REDEngineErrorReporter.exe*

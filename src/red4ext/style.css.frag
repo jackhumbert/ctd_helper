@@ -66,7 +66,7 @@ body {
   flex-direction: column;
 }
 
-h1 {
+h1, h2, h3, h4, h5 {
   margin: 0px;
 }
 
@@ -108,7 +108,7 @@ pre code {
   border: 1px solid #bbb;
 }
 
-.hljs-ln tr:nth-child(3) td {
+.call .hljs-ln tr:nth-child(3) td {
   background: hsla(0, 87%, 63%, 0.25);
 }
 /* for block of numbers */

@@ -15,7 +15,7 @@
 #include "Registrar.hpp"
 #include "Template.hpp"
 
-#define MAX_CALLS 16
+#define MAX_CALLS 10
 
 // struct Call {
 //   RED4ext::CClass *cls;
@@ -64,6 +64,8 @@ struct BaseFunction {
 };
 
 struct FuncCall {
+  ~FuncCall() = default;
+
   BaseFunction func;
   RED4ext::CClass *type;
   std::vector<FuncCall> children;
@@ -92,6 +94,8 @@ struct FuncCall {
 };
 
 struct CallPair {
+  ~CallPair() = default;
+
   FuncCall self;
   FuncCall parent;
   RED4ext::WeakHandle<RED4ext::ISerializable> context;
@@ -99,8 +103,8 @@ struct CallPair {
 };
 
 std::mutex queueLock;
-// std::map<std::string, std::deque<Call>> callQueues;
-std::map<std::string, std::deque<CallPair>> funcCallQueues;
+// std::map<std::string, std::queue<Call>> callQueues;
+std::map<std::string, std::queue<CallPair>> funcCallQueues;
 std::string lastThread;
 
 bool scriptLinkingError = false;
@@ -147,49 +151,6 @@ REGISTER_HOOK(uintptr_t __fastcall, ShowMessageBox, char a1, char a2) {
   }
 }
 
-CallPair* Invoke(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
-  auto func = *reinterpret_cast<RED4ext::CBaseFunction **>(stackFrame->code + 4);
-  // auto thread = std::this_thread::get_id();
-  // auto hash = std::hash<std::thread::id>()(thread);
-  wchar_t * thread_name;
-  HRESULT hr = GetThreadDescription(GetCurrentThread(), &thread_name);
-  CallPair * pair_p = nullptr;
-  if (func) {
-    auto call = CallPair();
-    call.self.func = *reinterpret_cast<BaseFunction*>(func);
-    call.self.type = func->GetParent();
-    if(stackFrame->func) {
-      call.parent.func = *reinterpret_cast<BaseFunction*>(stackFrame->func);
-      call.parent.type = stackFrame->func->GetParent();
-    }
-    if (context && context->ref.instance == context) {
-      call.self.contextType = call.parent.contextType = context->GetType();
-      // call.context.instance = context;
-      // call.context.refCount = context->ref.refCount;
-      if (call.self.contextType) {
-        call.self.contextType->ToString(context, call.self.contextString);
-        call.parent.contextType->ToString(context, call.parent.contextString);
-      }
-    }
-    std::wstring ws(thread_name);
-    lastThread = std::string(ws.begin(), ws.end());
-
-    std::lock_guard<std::mutex> lock(queueLock);
-    if (!funcCallQueues.contains(lastThread)) {
-      funcCallQueues.insert_or_assign(lastThread, std::deque<CallPair>());
-    }
-    auto queue = funcCallQueues.find(lastThread);
-    pair_p = &queue->second.emplace_back(call);
-    while (queue->second.size() > MAX_CALLS) {
-      auto old = queue->second.front();
-      if (old.context && old.context.refCount) {
-        old.context.refCount->DecRef();
-      }
-      queue->second.pop_front();
-    }
-  }
-  return pair_p;
-}
 /// @pattern 48 8B 02 48 83 C0 13 48 89 02 44 0F B6 10 48 FF C0 48 89 02 41 8B C2 4C 8D 15 ? ? ? 03 49 FF
 void __fastcall Breakpoint(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4);
 
@@ -208,22 +169,89 @@ REGISTER_HOOK(void __fastcall, Breakpoint, RED4ext::IScriptable *context, RED4ex
 void __fastcall InvokeStatic(RED4ext::IScriptable *, RED4ext::CStackFrame *stackFrame, uintptr_t, uintptr_t);
 
 REGISTER_HOOK(void __fastcall, InvokeStatic, RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
-  auto pair_p = Invoke(context, stackFrame, a3, a4);
-  InvokeStatic_Original(context, stackFrame, a3, a4);
-  if (pair_p) {
-    pair_p->cameBack = true;
+  auto func = *reinterpret_cast<RED4ext::CBaseFunction **>(stackFrame->code + 4);
+  wchar_t * thread_name;
+  HRESULT hr = GetThreadDescription(GetCurrentThread(), &thread_name);
+  // CallPair * pair_p = nullptr;
+  if (func) {
+    auto call = CallPair();
+    call.self.func = *reinterpret_cast<BaseFunction*>(func);
+    call.self.type = func->GetParent();
+    if (stackFrame->func) {
+      call.parent.func = *reinterpret_cast<BaseFunction*>(stackFrame->func);
+      call.parent.type = stackFrame->func->GetParent();
+    }
+    if (context && context->ref.instance == context) {
+      call.self.contextType = call.parent.contextType = context->GetType();
+      // call.context.instance = context;
+      // call.context.refCount = context->ref.refCount;
+      // if (call.self.contextType) {
+      //   call.self.contextType->ToString(context, call.self.contextString);
+      //   call.parent.contextType->ToString(context, call.parent.contextString);
+      // }
+    }
+    std::wstring ws(thread_name);
+    auto thread = std::string(ws.begin(), ws.end());
+    
+    std::lock_guard<std::mutex> lock(queueLock);
+    lastThread = thread;
+    if (funcCallQueues.find(thread) == funcCallQueues.end()) {
+      funcCallQueues[thread] = std::queue<CallPair>();
+    }
+    funcCallQueues[thread].emplace(call);
+    while (funcCallQueues[thread].size() > MAX_CALLS) {
+      funcCallQueues[thread].pop();
+    }
   }
+  
+  InvokeStatic_Original(context, stackFrame, a3, a4);
 }
 
 /// @pattern 48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 54 41 55 41 56 41 57 48 83 EC 40 48 8B 02 48
-void __fastcall InvokeVirtual(RED4ext::IScriptable *, RED4ext::CStackFrame *stackFrame, uintptr_t, uintptr_t);
+void __fastcall InvokeVirtual(RED4ext::IScriptable *, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4);
 
 REGISTER_HOOK(void __fastcall, InvokeVirtual, RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
-  auto pair_p = Invoke(context, stackFrame, a3, a4);
-  InvokeStatic_Original(context, stackFrame, a3, a4);
-  if (pair_p) {
-    pair_p->cameBack = true;
+  auto funcName = *reinterpret_cast<RED4ext::CName *>(stackFrame->code + 4);
+  auto cls = context->unk30;
+  if (!cls)
+    cls = context->GetNativeType();
+  auto func = cls->GetFunction(funcName);
+
+  wchar_t * thread_name;
+  HRESULT hr = GetThreadDescription(GetCurrentThread(), &thread_name);
+  // CallPair * pair_p = nullptr;
+  if (func) {
+    auto call = CallPair();
+    call.self.func = *reinterpret_cast<BaseFunction*>(func);
+    call.self.type = func->GetParent();
+    if (stackFrame->func) {
+      call.parent.func = *reinterpret_cast<BaseFunction*>(stackFrame->func);
+      call.parent.type = stackFrame->func->GetParent();
+    }
+    if (context && context->ref.instance == context) {
+      call.self.contextType = call.parent.contextType = context->GetType();
+      // call.context.instance = context;
+      // call.context.refCount = context->ref.refCount;
+      // if (call.self.contextType) {
+      //   call.self.contextType->ToString(context, call.self.contextString);
+      //   call.parent.contextType->ToString(context, call.parent.contextString);
+      // }
+    }
+    std::wstring ws(thread_name);
+    auto thread = std::string(ws.begin(), ws.end());
+
+    std::lock_guard<std::mutex> lock(queueLock);
+    lastThread = thread;
+    if (funcCallQueues.find(thread) == funcCallQueues.end()) {
+      funcCallQueues[thread] = std::queue<CallPair>();
+    }
+    funcCallQueues[thread].emplace(call);
+    while (funcCallQueues[thread].size() > MAX_CALLS) {
+      funcCallQueues[thread].pop();
+    }
   }
+
+  InvokeVirtual_Original(context, stackFrame, a3, a4);
 }
 
 std::unordered_map<std::filesystem::path, std::vector<std::string>> files;
@@ -364,16 +392,32 @@ REGISTER_HOOK(void __fastcall, CrashFunc, uint8_t a1, uintptr_t a2) {
   htmlLog.open(ctd_helper_dir / buf);
   htmlLog << CTD_HELPER_HEADER;
 
+  auto red4ext_log_path = Utils::GetRootDir() / "red4ext" / "logs" / "red4ext.log";
+  if (std::filesystem::exists(red4ext_log_path)) {
+    std::ifstream red4ext_log(red4ext_log_path);
+    std::stringstream red4buffer;
+    red4buffer << red4ext_log.rdbuf();
+    htmlLog << fmt::format("<h2>RED4ext log:</h2>\n<pre><code style='max-height:200px'>{}</code></pre>", red4buffer.str()) << std::endl;
+  }
+
+  auto redscript_log_path = Utils::GetRootDir() / "r6" / "logs" / "redscript_rCURRENT.log";
+  if (std::filesystem::exists(redscript_log_path)) {
+    std::ifstream redscript_log(redscript_log_path);
+    std::stringstream redscript_stream;
+    redscript_stream << redscript_log.rdbuf();
+    htmlLog << fmt::format("<h2>Redscript log:</h2>\n<pre><code style='max-height:200px'>{}</code></pre>", redscript_stream.str()) << std::endl;
+  }
+
   std::map<std::string, std::vector<FuncCall>> orgd;
 
   for (auto &queue : funcCallQueues) {
     auto thread = queue.first;
     for (auto i = 0; queue.second.size(); i++) {
       auto call = queue.second.front();
-      if (!call.cameBack) { // || (call.context.instance && call.context.refCount)) {
-          call.self.type->ToString(call.context.instance, call.self.contextString);
-          call.parent.contextString = call.self.contextString;
-      }
+      // if (!call.cameBack) { // || (call.context.instance && call.context.refCount)) {
+          // call.self.type->ToString(call.context.instance, call.self.contextString);
+          // call.parent.contextString = call.self.contextString;
+      // }
       if (orgd[thread].empty()) {
         call.parent.children.emplace_back(call.self);
         orgd[thread].emplace_back(call.parent);
@@ -385,15 +429,15 @@ REGISTER_HOOK(void __fastcall, CrashFunc, uint8_t a1, uintptr_t a2) {
           orgd[thread].emplace_back(call.parent);
         }
       }
-      queue.second.pop_front();
+      queue.second.pop();
     }
   }
 
   for (auto &queue : orgd) {
     auto level = 0;
-    std::deque<uint64_t> stack;
+    std::queue<uint64_t> stack;
     auto crashing = lastThread == queue.first;
-    htmlLog << fmt::format("<div class='thread'><h1>{0}{1}</h1>", queue.first, crashing ? " LAST EXECUTED":"") << std::endl;
+    htmlLog << fmt::format("<div class='thread'><h2>{0}{1}</h2>", queue.first, crashing ? " LAST EXECUTED":"") << std::endl;
     uint64_t last = 0;
     for (auto& call : queue.second) {
       PrintCall(htmlLog, call);
