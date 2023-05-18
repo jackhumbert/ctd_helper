@@ -108,7 +108,7 @@ struct ScriptHost {
   // sets unk24
   virtual inline void sub_40() {};
 
-  // gets unk24
+  // gets unk24, called by StartProfiling
   virtual inline void sub_48() {};
 
   // something with (), global exec|native functions
