@@ -1,10 +1,13 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(ctd_helper VERSION 0.1.3)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/deps/cyberpunk_cmake")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/deps/red4ext.sdk/cmake")
 
-list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
-list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/deps/cyberpunk_cmake")
-list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/deps/red4ext.sdk/cmake")
+include(ConfigureVersionFromGit)
+configure_version_from_git()
+
+project(ctd_helper VERSION ${GIT_VERSION_MAJOR}.${GIT_VERSION_MINOR}.${GIT_VERSION_PATCH})
 
 include(CyberpunkMod)
 
@@ -53,6 +56,11 @@ target_link_libraries(${MOD_SLUG}.dll
     Detours
     spdlog
 )
+
+# target_compile_definitions(${MOD_SLUG}.dll PRIVATE
+#   CTD_HELPER_DIALOG=1000
+#   CTD_HELPER_OPEN=1001
+# )
 
 configure_folder_file(readme.md)
 configure_folder_file(license.md)

@@ -53,8 +53,8 @@ code.hljs {
   font-weight: 700
 }
 
-
 body {
+  font-family: monospace;
   display: flex;
   gap: 8px;
   flex-direction: column;
@@ -66,11 +66,11 @@ body {
   flex-direction: column;
 }
 
-h1, h2, h3, h4, h5 {
+h1, h2, h3, h4, h5, p {
   margin: 0px;
 }
 
-pre {-moz-tab-size: 4;} /* Firefox */
+pre {-moz-tab-size: 4;}
 pre {
   tab-size: 4;
   white-space: pre-wrap;
@@ -111,7 +111,7 @@ pre code {
 .call .hljs-ln tr:nth-child(3) td {
   background: hsla(0, 87%, 63%, 0.25);
 }
-/* for block of numbers */
+
 .hljs-ln-numbers {
     -webkit-touch-callout: none;
     -webkit-user-select: none;
@@ -122,8 +122,6 @@ pre code {
 
     text-align: right;
     color: #666;
-
-    /* your custom style here */
 }
 
 .hljs-ln-n {
@@ -131,7 +129,6 @@ pre code {
   margin-right: 5px;
 }
 
-/* for block of code */
 .hljs-ln-code {
     padding-left: 10px;
 } 
@@ -140,4 +137,13 @@ pre code {
   display: flex;
   gap: 8px;
   flex-direction: column;
+}
+
+summary {
+	font-weight: 800;
+	font-size: 16px;
+}
+
+summary:hover {
+	cursor: pointer;
 })for_c++_include"

@@ -1,0 +1,11 @@
+#include <windows.h>
+
+CTD_HELPER_DIALOG DIALOGEX 0, 0, 213, 62
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "CTD Helper"
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+FONT 9, "Segoe UI"
+{
+   CONTROL "&Open report in web browser", 1, CTD_HELPER_OPEN, BS_DEFPUSHBUTTON | WS_CHILD | WS_VISIBLE | WS_TABSTOP, 55, 37, 101, 11 
+   CONTROL "Cyberpunk 2077 has crashed. CTD Helper will now create a report with details about the crash.", 0, STATIC, SS_CENTER | WS_CHILD | WS_VISIBLE | WS_GROUP, 17, 14, 180, 21 
+}

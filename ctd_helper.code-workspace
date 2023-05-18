@@ -88,6 +88,7 @@
 			"xutility": "cpp"
 		},
 		"editor.tabSize": 2,
-		"redscript.scriptCachePath": "C:\\Users\\Jack\\Documents\\cyberpunk\\ctd_helper\\prereqs.redscripts"
+		"redscript.scriptCachePath": "C:\\Users\\Jack\\Documents\\cyberpunk\\ctd_helper\\prereqs.redscripts",
+		"cmake.generator": "Ninja"
 	}
 }

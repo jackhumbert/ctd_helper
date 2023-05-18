@@ -2,10 +2,13 @@
 #include <RED4ext/Relocation.hpp>
 #include <filesystem>
 #include <fstream>
+#include <libloaderapi.h>
 #include <queue>
 #include <map>
+#include <shellapi.h>
 #include <spdlog/spdlog.h>
 #include <thread>
+#include <winuser.h>
 #include "RED4ext/ISerializable.hpp"
 #include "RED4ext/InstanceType.hpp"
 #include "RED4ext/RTTISystem.hpp"
@@ -14,64 +17,28 @@
 #include "Addresses.hpp"
 #include "Registrar.hpp"
 #include "Template.hpp"
+#include "Instr.hpp"
 
 #define MAX_CALLS 10
 
-// struct Call {
-//   RED4ext::CClass *cls;
-//   RED4ext::CName fullName;
-//   RED4ext::CName shortName;
-//   RED4ext::CClass *parentCls;
-//   RED4ext::CName parentFullName;
-//   RED4ext::CName parentShortName;
-//   std::time_t callTime;
-//   uint32_t fileIndex;
-//   uint32_t unk04;
-
-//   std::string GetFuncName() {
-//     std::string fullName(this->fullName.ToString());
-//     if (fullName.find(";") != -1) {
-//       fullName.replace(fullName.find(";"), 1, "(");
-//       while (fullName.find(";") != -1) {
-//         fullName.replace(fullName.find(";"), 1, ", ");
-//       }
-//     } else {
-//       fullName.append("(");
-//     }
-//     fullName.append(")");
-
-//     return fullName;
-//   }
-
-//   std::string GetParentFuncName() {
-//     std::string fullName(this->parentFullName.ToString());
-//     if (fullName.find(";") != -1) {
-//       fullName.replace(fullName.find(";"), 1, "(");
-//       while (fullName.find(";") != -1) {
-//         fullName.replace(fullName.find(";"), 1, ", ");
-//       }
-//     } else {
-//       fullName.append("(");
-//     }
-//     fullName.append(")");
-
-//     return fullName;
-//   }
-// };
+// HWND hWnd;
+RED4ext::PluginHandle pluginHandle;
 
 struct BaseFunction {
-  uint8_t raw[sizeof(RED4ext::CBaseFunction)];
+  uint8_t raw[sizeof(RED4ext::CScriptedFunction)];
 };
 
 struct FuncCall {
   ~FuncCall() = default;
 
   BaseFunction func;
-  RED4ext::CClass *type;
+  RED4ext::CClass* type;
   std::vector<FuncCall> children;
-  RED4ext::CClass *contextType;
-  RED4ext::IScriptable * context;
+  FuncCall* parent;
+  RED4ext::CClass* contextType;
+  RED4ext::IScriptable* context;
   RED4ext::CString contextString;
+  uint32_t line;
 
   RED4ext::CBaseFunction * get_func() {
     return reinterpret_cast<RED4ext::CBaseFunction*>(&this->func);
@@ -100,6 +67,7 @@ struct CallPair {
   FuncCall parent;
   RED4ext::WeakHandle<RED4ext::ISerializable> context;
   bool cameBack = false;
+  uint16_t line;
 };
 
 std::mutex queueLock;
@@ -160,6 +128,41 @@ REGISTER_HOOK(void __fastcall, Breakpoint, RED4ext::IScriptable *context, RED4ex
   Breakpoint_Original(context, stackFrame, a3, a4);
 }
 
+void LogFunctionCall(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, RED4ext::CBaseFunction *func) {
+  auto invoke = reinterpret_cast<RED4ext::Instr::Invoke *>(stackFrame->code);
+  wchar_t * thread_name;
+  HRESULT hr = GetThreadDescription(GetCurrentThread(), &thread_name);
+  auto call = CallPair();
+  call.line = invoke->lineNumber;
+  call.self.func = *reinterpret_cast<BaseFunction*>(func);
+  call.self.type = func->GetParent();
+  if (stackFrame->func) {
+    call.parent.func = *reinterpret_cast<BaseFunction*>(stackFrame->func);
+    call.parent.type = stackFrame->func->GetParent();
+  }
+  if (context && context->ref.instance == context) {
+    call.self.contextType = call.parent.contextType = context->GetType();
+    // call.context.instance = context;
+    // call.context.refCount = context->ref.refCount;
+    // if (call.self.contextType) {
+      // call.self.contextType->ToString(context, call.self.contextString);
+      // call.parent.contextString = call.self.contextString;
+    // }
+  }
+  std::wstring ws(thread_name);
+  auto thread = std::string(ws.begin(), ws.end());
+
+  std::lock_guard<std::mutex> lock(queueLock);
+  lastThread = thread;
+  if (funcCallQueues.find(thread) == funcCallQueues.end()) {
+    funcCallQueues[thread] = std::queue<CallPair>();
+  }
+  funcCallQueues[thread].emplace(call);
+  while (funcCallQueues[thread].size() > MAX_CALLS) {
+    funcCallQueues[thread].pop();
+  }
+}
+
 // 48 83 EC 40 48 8B 02 4C 8B F2 44 0F B7 7A 60
 // 1.52 RVA: 0x27A410 / 2597904
 // 1.6  RVA: 0x27E1E0 / 2613728
@@ -169,39 +172,10 @@ REGISTER_HOOK(void __fastcall, Breakpoint, RED4ext::IScriptable *context, RED4ex
 void __fastcall InvokeStatic(RED4ext::IScriptable *, RED4ext::CStackFrame *stackFrame, uintptr_t, uintptr_t);
 
 REGISTER_HOOK(void __fastcall, InvokeStatic, RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
-  auto func = *reinterpret_cast<RED4ext::CBaseFunction **>(stackFrame->code + 4);
-  wchar_t * thread_name;
-  HRESULT hr = GetThreadDescription(GetCurrentThread(), &thread_name);
-  // CallPair * pair_p = nullptr;
-  if (func) {
-    auto call = CallPair();
-    call.self.func = *reinterpret_cast<BaseFunction*>(func);
-    call.self.type = func->GetParent();
-    if (stackFrame->func) {
-      call.parent.func = *reinterpret_cast<BaseFunction*>(stackFrame->func);
-      call.parent.type = stackFrame->func->GetParent();
-    }
-    if (context && context->ref.instance == context) {
-      call.self.contextType = call.parent.contextType = context->GetType();
-      // call.context.instance = context;
-      // call.context.refCount = context->ref.refCount;
-      // if (call.self.contextType) {
-      //   call.self.contextType->ToString(context, call.self.contextString);
-      //   call.parent.contextType->ToString(context, call.parent.contextString);
-      // }
-    }
-    std::wstring ws(thread_name);
-    auto thread = std::string(ws.begin(), ws.end());
-    
-    std::lock_guard<std::mutex> lock(queueLock);
-    lastThread = thread;
-    if (funcCallQueues.find(thread) == funcCallQueues.end()) {
-      funcCallQueues[thread] = std::queue<CallPair>();
-    }
-    funcCallQueues[thread].emplace(call);
-    while (funcCallQueues[thread].size() > MAX_CALLS) {
-      funcCallQueues[thread].pop();
-    }
+  auto invokeStatic = reinterpret_cast<RED4ext::Instr::InvokeStatic *>(stackFrame->code);
+
+  if (invokeStatic->func) {
+    LogFunctionCall(context, stackFrame, invokeStatic->func);
   }
   
   InvokeStatic_Original(context, stackFrame, a3, a4);
@@ -211,44 +185,14 @@ REGISTER_HOOK(void __fastcall, InvokeStatic, RED4ext::IScriptable *context, RED4
 void __fastcall InvokeVirtual(RED4ext::IScriptable *, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4);
 
 REGISTER_HOOK(void __fastcall, InvokeVirtual, RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
-  auto funcName = *reinterpret_cast<RED4ext::CName *>(stackFrame->code + 4);
+  auto invokeVirtual = reinterpret_cast<RED4ext::Instr::InvokeVirtual *>(stackFrame->code);
   auto cls = context->unk30;
   if (!cls)
     cls = context->GetNativeType();
-  auto func = cls->GetFunction(funcName);
+  auto func = cls->GetFunction(invokeVirtual->funcName);
 
-  wchar_t * thread_name;
-  HRESULT hr = GetThreadDescription(GetCurrentThread(), &thread_name);
-  // CallPair * pair_p = nullptr;
   if (func) {
-    auto call = CallPair();
-    call.self.func = *reinterpret_cast<BaseFunction*>(func);
-    call.self.type = func->GetParent();
-    if (stackFrame->func) {
-      call.parent.func = *reinterpret_cast<BaseFunction*>(stackFrame->func);
-      call.parent.type = stackFrame->func->GetParent();
-    }
-    if (context && context->ref.instance == context) {
-      call.self.contextType = call.parent.contextType = context->GetType();
-      // call.context.instance = context;
-      // call.context.refCount = context->ref.refCount;
-      // if (call.self.contextType) {
-      //   call.self.contextType->ToString(context, call.self.contextString);
-      //   call.parent.contextType->ToString(context, call.parent.contextString);
-      // }
-    }
-    std::wstring ws(thread_name);
-    auto thread = std::string(ws.begin(), ws.end());
-
-    std::lock_guard<std::mutex> lock(queueLock);
-    lastThread = thread;
-    if (funcCallQueues.find(thread) == funcCallQueues.end()) {
-      funcCallQueues[thread] = std::queue<CallPair>();
-    }
-    funcCallQueues[thread].emplace(call);
-    while (funcCallQueues[thread].size() > MAX_CALLS) {
-      funcCallQueues[thread].pop();
-    }
+    LogFunctionCall(context, stackFrame, func);
   }
 
   InvokeVirtual_Original(context, stackFrame, a3, a4);
@@ -277,7 +221,7 @@ void encode_html(std::string& data) {
 
 // void print_source(std::ofstream& htmlLog, uint32_t file_idx, uint32_t line_idx) {
 void print_source(std::ofstream& htmlLog, uint32_t file_idx, uint32_t line_idx, std::string func) {
-  auto scriptFile = *ScriptHost::Get()->files.Get(file_idx);
+  auto scriptFile = *ScriptHost::Get()->interface.files.Get(file_idx);
   if (scriptFile) {
     auto path = std::filesystem::path(scriptFile->filename.c_str());
     auto is_red = false;
@@ -305,7 +249,7 @@ void print_source(std::ofstream& htmlLog, uint32_t file_idx, uint32_t line_idx, 
         }
       }
       auto line_index = line_idx;
-      htmlLog << fmt::format("<a href='{}'>{}:{}</a>", path.string().c_str(), rel_path.string().c_str(), line_idx) << std::endl;
+      htmlLog << fmt::format("<p><a href='{}'>{}:{}</a></p>", path.string().c_str(), rel_path.string().c_str(), line_idx) << std::endl;
       if (files[path].size() > line_index) {
         htmlLog << fmt::format("<pre><code class='language-swift' data-ln-start-from='{}'>", line_idx - LINES_BEFORE_TO_PRINT);
         for (int i = -LINES_BEFORE_TO_PRINT; i <= LINES_AFTER_TO_PRINT; i++) {
@@ -320,7 +264,7 @@ void print_source(std::ofstream& htmlLog, uint32_t file_idx, uint32_t line_idx, 
         spdlog::warn("Line number exceded file: {}:{}", path.string().c_str(), line_idx + 1);
       }
     } else {
-      htmlLog << fmt::format("<a href='{}'>{}:{}</a>", path.string().c_str(), rel_path.string().c_str(), line_idx) << std::endl;
+      htmlLog << fmt::format("<p><a href='{}'>{}:{}</a></p>", path.string().c_str(), rel_path.string().c_str(), line_idx) << std::endl;
       spdlog::warn("Could not locate file: {}", path.string().c_str());
     }
     htmlLog << "</div>" << std::endl;
@@ -342,9 +286,8 @@ FuncCall * FindFunc(std::vector<FuncCall>& map, RED4ext::CName key) {
   }
 }
 
-auto rtti = RED4ext::CRTTISystem::Get();
-
 void PrintCall(std::ofstream& htmlLog, FuncCall& call) {
+  auto rtti = RED4ext::CRTTISystem::Get();
   htmlLog << "<div class='call'>" << std::endl;
   if (call.contextString.Length()) {
     htmlLog << "<details>\n<summary>";
@@ -354,20 +297,92 @@ void PrintCall(std::ofstream& htmlLog, FuncCall& call) {
     htmlLog << fmt::format("{}::", rtti->ConvertNativeToScriptName(call.type->GetName()).ToString());
   }
   htmlLog << fmt::format("{}", call.GetFuncName());
+  auto func = call.get_func();
+  // if (func) {
+  //   htmlLog << func->GetType()
+  // }
   htmlLog << "</span>" << std::endl;
   if (call.contextString.Length()) {
     htmlLog << "</summary>" << std::endl;
     htmlLog << fmt::format("<pre><code>{}</code></pre>", call.contextString.c_str()) << std::endl;
     htmlLog << "</details>" << std::endl;
   }
-  if (call.get_func()->bytecode.fileIndex != 0 || call.get_func()->bytecode.unk04 != 0) {
-    print_source(htmlLog, call.get_func()->bytecode.fileIndex, call.get_func()->bytecode.unk04, call.GetFuncName());
+  uint32_t line;
+  if (call.line) {
+    line = call.line;
+  } else {
+    line = call.get_func()->bytecode.unk04;
+  }
+  if (call.get_func()->bytecode.fileIndex != 0 || line != 0) {
+    print_source(htmlLog, call.get_func()->bytecode.fileIndex, line, call.GetFuncName());
   }
   for (auto& child : call.children) {
     PrintCall(htmlLog, child);
   }
   htmlLog << "</div>" << std::endl;
 }
+
+std::wstring currentLogFile;
+
+// static INT_PTR CALLBACK dlg_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp) {
+//     switch(msg) {
+//         case WM_COMMAND:
+//             switch(LOWORD(wp))
+//             {
+//                 case CTD_HELPER_OPEN:
+//                   ShellExecute(0, 0, currentLogFile.c_str(), 0, 0 , SW_SHOW );
+//                 break;
+//             }
+//           break;
+//         case WM_CLOSE:
+//             PostQuitMessage(0);
+//             break;
+//         default:
+//             return FALSE;
+//     }
+//     return TRUE;
+// }
+
+// 1.6  RVA: 0x2FFC6F0 / 50317040
+/// @pattern 40 53 48 83 EC 40 48 83 3D ? ? ? 01 00 48 8B D9 75 62 48 83 3D ? ? ? 01 00 75 58 33 C0 48
+// void __fastcall SetHWND(HWND hWnd);
+// 
+// REGISTER_HOOK(void __fastcall, SetHWND, HWND aHwnd) {
+//   hWnd = aHwnd;
+//   SetHWND_Original(aHwnd);
+// }
+
+void print_log(std::ofstream& stream, std::string name, std::filesystem::path path) {
+  if (std::filesystem::exists(path)) {
+    std::ifstream log_file(path);
+    std::stringstream log_buffer;
+    log_buffer << log_file.rdbuf();
+    stream << fmt::format("<details><summary>{} log</summary>\n<pre><code>{}</code></pre></details>", name, log_buffer.str()) << std::endl;
+  }
+}
+
+// struct ErrorReporter
+// {
+//   uint64_t unk00[9];
+//   HANDLE handle;
+//   uint32_t unk50;
+//   uint8_t success;
+// };
+
+// 1.6  RVA: 0x2BCF150 / 45936976
+/// @pattern 0F B6 05 ? ? ? 02 C3
+/// @nth 6/12
+// bool __fastcall IsDebug();
+
+// /// @pattern 40 53 48 81 EC 30 02 00 00 80 3D ? ? ? 02 00 48 8B D9 0F 85 B2 00 00 00 41 B8 04 01 00 00 48
+// bool __fastcall LaunchErrorReporter(ErrorReporter* errorReporter);
+
+// REGISTER_HOOK(bool __fastcall, LaunchErrorReporter, ErrorReporter* errorReporter) {
+//   auto result = LaunchErrorReporter_Original(errorReporter);
+//   if (result) {
+//   }
+//   return result;
+// }
 
 // 48 8D 68 A1 48 81 EC A0 00 00 00 0F B6 F1
 // 1.6  RVA: 0x2B93EF0 / 45694704
@@ -381,31 +396,39 @@ REGISTER_HOOK(void __fastcall, CrashFunc, uint8_t a1, uintptr_t a2) {
 
   time_t     now = time(0);
   struct tm  tstruct;
-  char       buf[80];
+  char       log_filename[80];
+  char niceTimestamp[80];
   tstruct = *localtime(&now);
-  strftime(buf, sizeof(buf), "%Y-%m-%d_%H-%M-%S.html", &tstruct);
+  strftime(log_filename, sizeof(log_filename), "%Y-%m-%d_%H-%M-%S.html", &tstruct);
+  strftime(niceTimestamp, sizeof(niceTimestamp), "%Y-%m-%d %H:%M:%S", &tstruct);
 
-  spdlog::error("Crash! Check {} for details", buf);
   auto ctd_helper_dir = Utils::GetRootDir() / "red4ext" / "logs" / "ctd_helper";
+  auto currentLogFilePath = ctd_helper_dir / log_filename;
+  currentLogFile = currentLogFilePath.wstring();
+
+  spdlog::error(L"Crash! Check {} for details", currentLogFile);
   std::filesystem::create_directories(ctd_helper_dir);
+
   std::ofstream htmlLog;
-  htmlLog.open(ctd_helper_dir / buf);
+  htmlLog.open(currentLogFilePath);
   htmlLog << CTD_HELPER_HEADER;
+  htmlLog << fmt::format("<title>CTD Helper Report for Crash on {}</title>\n", niceTimestamp);
+  htmlLog << "</head>\n<body>";
+  // auto dlg = CreateDialog(pluginHandle, MAKEINTRESOURCE(CTD_HELPER_DIALOG), hWnd, dlg_proc);
+  // auto dlg = CreateDialog(pluginHandle, MAKEINTRESOURCE(CTD_HELPER_DIALOG), GetConsoleWindow() , dlg_proc);
+  // ShowWindow(dlg, SW_SHOW);
 
-  auto red4ext_log_path = Utils::GetRootDir() / "red4ext" / "logs" / "red4ext.log";
-  if (std::filesystem::exists(red4ext_log_path)) {
-    std::ifstream red4ext_log(red4ext_log_path);
-    std::stringstream red4buffer;
-    red4buffer << red4ext_log.rdbuf();
-    htmlLog << fmt::format("<h2>RED4ext log:</h2>\n<pre><code style='max-height:200px'>{}</code></pre>", red4buffer.str()) << std::endl;
-  }
+  htmlLog << fmt::format("<h1>CTD Helper Report for Crash on {}</h1>\n", niceTimestamp);
+  htmlLog << "<p>Generated by <a href='https://github.com/jackhumbert/ctd_helper'>CTD Helper</a></h1>\n";
 
-  auto redscript_log_path = Utils::GetRootDir() / "r6" / "logs" / "redscript_rCURRENT.log";
-  if (std::filesystem::exists(redscript_log_path)) {
-    std::ifstream redscript_log(redscript_log_path);
-    std::stringstream redscript_stream;
-    redscript_stream << redscript_log.rdbuf();
-    htmlLog << fmt::format("<h2>Redscript log:</h2>\n<pre><code style='max-height:200px'>{}</code></pre>", redscript_stream.str()) << std::endl;
+  print_log(htmlLog, "RED4ext", Utils::GetRootDir() / "red4ext" / "logs" / "red4ext.log");
+  print_log(htmlLog, "Redscript", Utils::GetRootDir() / "r6" / "logs" / "redscript_rCURRENT.log");
+  print_log(htmlLog, "Input Loader", Utils::GetRootDir() / "red4ext" / "logs" / "input_loader.log");
+   
+  if (scriptLinkingError) {
+    std::wstring werror(errorMessage);
+    std::string error(werror.begin(), werror.end());
+    htmlLog << fmt::format("<details><summary>Script Linking Error</summary>\n<pre><code>{}</code></pre></details>", error);
   }
 
   std::map<std::string, std::vector<FuncCall>> orgd;
@@ -414,19 +437,25 @@ REGISTER_HOOK(void __fastcall, CrashFunc, uint8_t a1, uintptr_t a2) {
     auto thread = queue.first;
     for (auto i = 0; queue.second.size(); i++) {
       auto call = queue.second.front();
-      // if (!call.cameBack) { // || (call.context.instance && call.context.refCount)) {
-          // call.self.type->ToString(call.context.instance, call.self.contextString);
-          // call.parent.contextString = call.self.contextString;
+      // if (call.context.instance && call.context.refCount) {
+      //     call.self.type->ToString(call.context.instance, call.self.contextString);
+      //     call.parent.contextString = call.self.contextString;
       // }
       if (orgd[thread].empty()) {
-        call.parent.children.emplace_back(call.self);
-        orgd[thread].emplace_back(call.parent);
+        auto child = call.parent.children.emplace_back(call.self);
+        child.line = call.line;
+        auto parent = orgd[thread].emplace_back(call.parent);
+        child.parent = &parent;
       } else {
         if (auto func = FindFunc(orgd[thread], call.parent.get_func()->fullName); func != nullptr) {
-          func->children.emplace_back(call.self);
+          auto child = func->children.emplace_back(call.self);
+          child.line = call.line;
+          child.parent = func;
         } else {
-          call.parent.children.emplace_back(call.self);
-          orgd[thread].emplace_back(call.parent);
+          auto child = call.parent.children.emplace_back(call.self);
+          child.line = call.line;
+          auto parent = orgd[thread].emplace_back(call.parent);
+          child.parent = &parent;
         }
       }
       queue.second.pop();
@@ -449,7 +478,10 @@ REGISTER_HOOK(void __fastcall, CrashFunc, uint8_t a1, uintptr_t a2) {
 </html>)";
   htmlLog.close();
 
-  std::filesystem::copy_file(ctd_helper_dir / buf, ctd_helper_dir / "latest.html", std::filesystem::copy_options::overwrite_existing);
+  auto latest = ctd_helper_dir / "latest.html";
+  std::filesystem::copy_file(currentLogFilePath, latest, std::filesystem::copy_options::overwrite_existing);
+  spdlog::info(L"Log copied to ", latest.c_str());
+  ShellExecute(0, 0, currentLogFile.c_str(), 0, 0 , SW_SHOW );
 
   CrashFunc_Original(a1, a2);
 }
@@ -458,26 +490,27 @@ REGISTER_HOOK(void __fastcall, CrashFunc, uint8_t a1, uintptr_t a2) {
 // 1.61 RVA: 0x2B96000
 // 1.61hf RVA: 0x2B989E0
 /// @pattern 4C 89 4C 24 20 53 55 56 57 48 83 EC 68
-__int64 sub_142B90C60(const char *, int, const char *, const char *);
+__int64 AssertionFailed(const char *, int, const char *, const char *...);
 
-REGISTER_HOOK(__int64, sub_142B90C60, const char* file, int lineNum, const char * func, const char * message) {
+REGISTER_HOOK(__int64, AssertionFailed, const char* file, int lineNum, const char * condition, const char * message...) {
+  va_list args;
+  va_start(args, message);
   spdlog::error("File: {} @ Line {}", file, lineNum);
-  if (func) {
-    spdlog::error("  {}", func);
+  if (condition) {
+    spdlog::error("Condition: {}", condition);
   }
   if (message) {
-    spdlog::error("  {}", message);
+    char buffer[0x400];
+    sprintf(buffer, message, args);
+    spdlog::error("Message: {}", buffer);
   }
-  return sub_142B90C60_Original(file, lineNum, func, message);
+  return AssertionFailed_Original(file, lineNum, condition, message, args);
 }
 
-RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::EMainReason aReason,
-                                        const RED4ext::Sdk *aSdk) {
+RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::EMainReason aReason, const RED4ext::Sdk *aSdk) {
   switch (aReason) {
   case RED4ext::EMainReason::Load: {
-    // Attach hooks, register RTTI types, add custom states or initalize your
-    // application. DO NOT try to access the game's memory at this point, it
-    // is not initalized yet.
+    pluginHandle = aHandle;
 
     Utils::CreateLogger();
     spdlog::info("Starting up CTD Helper v{}.{}.{}", MOD_VERSION_MAJOR, MOD_VERSION_MINOR, MOD_VERSION_PATCH);

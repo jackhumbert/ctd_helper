@@ -23,6 +23,4 @@ fmt::format(R"(<!DOCTYPE html>
 hljs.highlightAll();
 hljs.initLineNumbersOnLoad();
 </script>
-</head>
-<body>
 )", CTD_HELPER_CSS, CTD_HELPER_HIGHLIGHT, CTD_HELPER_LINE_NUMBERS);
