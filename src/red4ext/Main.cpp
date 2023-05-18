@@ -8,6 +8,7 @@
 #include <shellapi.h>
 #include <spdlog/spdlog.h>
 #include <thread>
+#include <winnt.h>
 #include <winuser.h>
 #include "RED4ext/ISerializable.hpp"
 #include "RED4ext/InstanceType.hpp"
@@ -18,6 +19,7 @@
 #include "Registrar.hpp"
 #include "Template.hpp"
 #include "Instr.hpp"
+#include <CyberpunkMod.hpp>
 
 #define MAX_CALLS 10
 
@@ -128,7 +130,12 @@ REGISTER_HOOK(void __fastcall, Breakpoint, RED4ext::IScriptable *context, RED4ex
   Breakpoint_Original(context, stackFrame, a3, a4);
 }
 
+// #define CTD_HELPER_PROFILING
+
 void LogFunctionCall(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, RED4ext::CBaseFunction *func) {
+  #ifdef CTD_HELPER_PROFILING
+    auto profiler = CyberpunkMod::Profiler();
+  #endif
   auto invoke = reinterpret_cast<RED4ext::Instr::Invoke *>(stackFrame->code);
   wchar_t * thread_name;
   HRESULT hr = GetThreadDescription(GetCurrentThread(), &thread_name);
@@ -161,6 +168,13 @@ void LogFunctionCall(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackF
   while (funcCallQueues[thread].size() > MAX_CALLS) {
     funcCallQueues[thread].pop();
   }
+
+  #ifdef CTD_HELPER_PROFILING
+    auto avg = profiler.End();
+    if (avg != 0) {
+      spdlog::info("Average microseconds for CTD Helper: {}", avg);
+    }
+  #endif
 }
 
 // 48 83 EC 40 48 8B 02 4C 8B F2 44 0F B7 7A 60
