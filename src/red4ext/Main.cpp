@@ -10,6 +10,7 @@
 #include <thread>
 #include <winnt.h>
 #include <winuser.h>
+#include "RED4ext/CNamePool.hpp"
 #include "RED4ext/ISerializable.hpp"
 #include "RED4ext/InstanceType.hpp"
 #include "RED4ext/RTTISystem.hpp"
@@ -130,15 +131,22 @@ REGISTER_HOOK(void __fastcall, Breakpoint, RED4ext::IScriptable *context, RED4ex
   Breakpoint_Original(context, stackFrame, a3, a4);
 }
 
-// #define CTD_HELPER_PROFILING
+#define CTD_HELPER_PROFILING
+int numberOfProcessors = 4;
 
 void LogFunctionCall(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, RED4ext::CBaseFunction *func) {
-  #ifdef CTD_HELPER_PROFILING
-    auto profiler = CyberpunkMod::Profiler();
-  #endif
-  auto invoke = reinterpret_cast<RED4ext::Instr::Invoke *>(stackFrame->code);
+
   wchar_t * thread_name;
   HRESULT hr = GetThreadDescription(GetCurrentThread(), &thread_name);
+  std::wstring ws(thread_name);
+  auto thread = std::string(ws.begin(), ws.end());
+
+  #ifdef CTD_HELPER_PROFILING
+    RED4ext::CNamePool::Add(thread.c_str());
+    auto profiler = CyberpunkMod::Profiler(thread.c_str(), 5);
+  #endif
+
+  auto invoke = reinterpret_cast<RED4ext::Instr::Invoke *>(stackFrame->code);
   auto call = CallPair();
   call.line = invoke->lineNumber;
   call.self.func = *reinterpret_cast<BaseFunction*>(func);
@@ -155,24 +163,22 @@ void LogFunctionCall(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackF
       // call.self.contextType->ToString(context, call.self.contextString);
       // call.parent.contextString = call.self.contextString;
     // }
-  }
-  std::wstring ws(thread_name);
-  auto thread = std::string(ws.begin(), ws.end());
+  };
 
-  std::lock_guard<std::mutex> lock(queueLock);
-  lastThread = thread;
-  if (funcCallQueues.find(thread) == funcCallQueues.end()) {
-    funcCallQueues[thread] = std::queue<CallPair>();
+  {
+    std::lock_guard<std::mutex> lock(queueLock);
+    lastThread = thread;
   }
-  funcCallQueues[thread].emplace(call);
-  while (funcCallQueues[thread].size() > MAX_CALLS) {
-    funcCallQueues[thread].pop();
+  auto& queue = funcCallQueues[thread];
+  queue.emplace(call);
+  while (queue.size() > MAX_CALLS) {
+    queue.pop();
   }
 
   #ifdef CTD_HELPER_PROFILING
     auto avg = profiler.End();
     if (avg != 0) {
-      spdlog::info("Average microseconds for CTD Helper: {}", avg);
+      spdlog::info("1s of execution in {:<15}: {:7}us", profiler.m_tracker.ToString(), avg);
     }
   #endif
 }
@@ -533,6 +539,8 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::
     spdlog::info("Base address: {}", fmt::ptr(ptr));
 
     ModModuleFactory::GetInstance().Load(aSdk, aHandle);
+
+    numberOfProcessors = std::thread::hardware_concurrency();
 
     break;
   }
