@@ -17,7 +17,7 @@
 #include "Utils.hpp"
 #include "ScriptHost.hpp"
 #include "Addresses.hpp"
-#include "Registrar.hpp"
+#include <Registrar.hpp>
 #include "Template.hpp"
 #include "Instr.hpp"
 #include <CyberpunkMod.hpp>
@@ -131,7 +131,7 @@ REGISTER_HOOK(void __fastcall, Breakpoint, RED4ext::IScriptable *context, RED4ex
   Breakpoint_Original(context, stackFrame, a3, a4);
 }
 
-#define CTD_HELPER_PROFILING
+// #define CTD_HELPER_PROFILING
 int numberOfProcessors = 4;
 
 void LogFunctionCall(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, RED4ext::CBaseFunction *func) {
