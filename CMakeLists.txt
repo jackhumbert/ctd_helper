@@ -50,12 +50,18 @@ configure_red4ext_addresses(Addresses.hpp)
 
 find_package(Detours)
 find_package(Spdlog)
+find_package(RedscriptCAPI)
+find_package(ModSettings)
 
 target_link_libraries(${MOD_SLUG}.dll
   PUBLIC
     Detours
     spdlog
+    RedscriptCAPI
 )
+
+target_include_directories(${MOD_SLUG}.dll PRIVATE $<TARGET_PROPERTY:mod_settings.dll,INTERFACE_INCLUDE_DIRECTORIES>)
+
 
 # target_compile_definitions(${MOD_SLUG}.dll PRIVATE
 #   CTD_HELPER_DIALOG=1000
@@ -65,6 +71,6 @@ target_link_libraries(${MOD_SLUG}.dll
 configure_folder_file(readme.md)
 configure_folder_file(license.md)
 
-configure_uninstall()
+# configure_uninstall()
 configure_release(${MOD_SLUG}_${MOD_VERSION_STR}.zip)
 configure_install()

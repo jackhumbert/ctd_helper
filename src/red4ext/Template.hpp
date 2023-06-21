@@ -4,9 +4,9 @@ const auto CTD_HELPER_CSS =
 const auto CTD_HELPER_HIGHLIGHT = 
 #include "highlight.min.js.frag"
 ;
-const auto CTD_HELPER_LINE_NUMBERS = 
-#include "line-numbers.min.js.frag"
-;
+// const auto CTD_HELPER_LINE_NUMBERS = 
+// #include "line-numbers.min.js.frag"
+// ;
 
 const auto CTD_HELPER_HEADER =
 fmt::format(R"(<!DOCTYPE html>
@@ -18,9 +18,8 @@ fmt::format(R"(<!DOCTYPE html>
 <script>
 {}
 
-{}
 
 hljs.highlightAll();
-hljs.initLineNumbersOnLoad();
+//hljs.initLineNumbersOnLoad();
 </script>
-)", CTD_HELPER_CSS, CTD_HELPER_HIGHLIGHT, CTD_HELPER_LINE_NUMBERS);
+)", CTD_HELPER_CSS, CTD_HELPER_HIGHLIGHT);//, CTD_HELPER_LINE_NUMBERS);

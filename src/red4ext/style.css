@@ -1,16 +1,34 @@
+.source {
+  background-color: #282b2e;
+  padding: 0.5em 0em;
+  border-radius: 2px;
+}
+
+a {
+  color: #cc7832;
+}
+
+pre {
+  background-color: #282b2e;
+  padding: 0em 0.5em;
+}
+
+pre.last-line {
+  background-color: hsla(0, 87%, 63%, 0.25);
+}
+
 pre code.hljs {
   display: block;
   overflow-x: auto;
-  padding: 1em
 }
 
-code.hljs {
-  padding: 3px 5px
+pre code.hljs.indent {
+  padding-left: 5em;
+  text-indent: -5em;
 }
 
 .hljs {
   color: #a9b7c6;
-  background: #282b2e
 }
 
 .hljs-bullet,.hljs-literal,.hljs-number,.hljs-symbol {
@@ -37,7 +55,11 @@ code.hljs {
   color: #6a8759
 }
 
-.hljs-section,.hljs-title,.hljs-type {
+.hljs-title {
+  color: #bbb529
+}
+
+.hljs-section,.hljs-type {
   color: #ffc66d
 }
 
@@ -54,6 +76,8 @@ code.hljs {
 }
 
 body {
+  background: #1a1c1e;
+  color: #a9b7c6;
   font-family: monospace;
   display: flex;
   gap: 8px;
@@ -78,38 +102,35 @@ pre {
 }
 
 details pre {
-  margin-top: 8px;
+  margin-top: 0px;
 }
 
 .call {
-  background: #eee;
-  border: 1px solid #ccc;
+  background: #42464a;
   border-radius: 5px;
-  padding: 10px;
-
+  padding: .8em 0em;
+  color:#eaeaea;
   display: flex;
-  gap: 8px;
+  gap: 0.5em;
   flex-direction: column;
+  border: #42464a solid 1px;
 }
 
 pre code {
-  border-radius: 5px;
   font-size: 12px;
 }
 
 .call h2, .call .call-name {
   font-family: monospace;
-  font-size: 16px;
-  margin: 0px;
+  font-size: 12px;
+  margin: 0em 1em;
 }
 
 .call .call {
-  background: #ddd;
-  border: 1px solid #bbb;
-}
-
-.call .hljs-ln tr:nth-child(3) td {
-  background: hsla(0, 87%, 63%, 0.25);
+  /* background: #ddd; */
+  /* border: 1px solid #bbb; */
+  margin: 0.5em;
+  padding: 0.5em 0em;
 }
 
 .hljs-ln-numbers {
@@ -132,12 +153,6 @@ pre code {
 .hljs-ln-code {
     padding-left: 10px;
 } 
-
-.source {
-  display: flex;
-  gap: 8px;
-  flex-direction: column;
-}
 
 summary {
 	font-weight: 800;
