@@ -1,6 +1,6 @@
 # Crash-To-Desktop Helper
 
-![](https://byob.yarr.is/olkb/reform_ortho_firmware/cp_version)
+![](https://byob.yarr.is/jackhumbert/ctd_helper/cp_version)
 
 This will output a useful log to `red4ext/logs/ctd_helper.log` upon a crash in Cyberpunk 2077.
 
