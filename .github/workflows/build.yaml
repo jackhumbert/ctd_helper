@@ -62,3 +62,12 @@ jobs:
       with:
         name: ${{ env.MOD_ZIP_FILENAME }}_${{ env.PRETTY_CONFIG }}_${{ env.SHORT_SHA }}_requirements_pdb
         path: ${{ github.workspace }}/game_dir_requirements_debug/**
+
+    - name: 'Version Badge'
+      uses: RubbaBoy/BYOB@v1.3.0
+      with:
+        NAME: cp_version
+        LABEL: 'Cyberpunk 2077'
+        STATUS: ${{ env.CYBERPUNK_2077_GAME_VERSION }}
+        COLOR: ${{ steps.compile.outcome == 'success' && '31b75d' || 'red' }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
