@@ -5,6 +5,8 @@ jobs:
   build:
     name: Build (${{ matrix.config }})
     runs-on: windows-latest
+    permissions:
+      contents: write
 
     strategy:
       matrix:
@@ -22,6 +24,7 @@ jobs:
       run: cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CI_BUILD=ON -DGITHUB_ENV="$env:GITHUB_ENV" -G Ninja
 
     - name: Build
+      id: build
       run: cmake --build ${{ github.workspace }}/build --config ${{ matrix.config }}
 
     - name: Get short SHA
@@ -64,10 +67,16 @@ jobs:
         path: ${{ github.workspace }}/game_dir_requirements_debug/**
 
     - name: 'Version Badge'
-      uses: RubbaBoy/BYOB@v1.3.0
-      with:
-        NAME: cp_version
-        LABEL: 'Cyberpunk 2077'
-        STATUS: ${{ env.CYBERPUNK_2077_GAME_VERSION }}
-        COLOR: ${{ steps.compile.outcome == 'success' && '31b75d' || 'red' }}
+      if: always()
+      run: |
+        mkdir badge
+        echo '{"cp_version":{"label":"Cyberpunk 2077","status":"${{ env.CYBERPUNK_2077_GAME_VERSION }}","color":"${{ steps.build.outcome == 'success' && '31b75d' || 'red' }}"}}' > badge/shields.json
+
+    - name: Push shields branch
+      if: github.ref == 'refs/heads/main'
+      uses: s0/git-publish-subdir-action@develop
+      env:
+        REPO: self
+        BRANCH: shields
+        FOLDER: badge
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
