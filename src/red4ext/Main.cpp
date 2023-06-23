@@ -634,12 +634,13 @@ REGISTER_HOOK(void __fastcall, CrashFunc, uint8_t a1, uintptr_t a2) {
 </html>)";
   htmlLog.close();
 
+  ShellExecute(0, 0, currentLogFile.c_str(), 0, 0 , SW_SHOW );
+
   bundle_free(bundle);
 
   auto latest = ctd_helper_dir / "latest.html";
   std::filesystem::copy_file(currentLogFilePath, latest, std::filesystem::copy_options::overwrite_existing);
   spdlog::info("Log copied to {}", latest.string().c_str());
-  ShellExecute(0, 0, currentLogFile.c_str(), 0, 0 , SW_SHOW );
 
   CrashFunc_Original(a1, a2);
 }
