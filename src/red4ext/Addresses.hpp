@@ -5,13 +5,13 @@
 #define __LINE_STR__ ZOLTAN_EXPAND_THEN_STRINGISE(__LINE__)
 
 #ifndef AssertionFailed_Addr
-#define AssertionFailed_Addr 0x2BD4E80
+#define AssertionFailed_Addr 0x2BD4FE0
 #endif
 #ifndef Breakpoint_Addr
 #define Breakpoint_Addr 0x287D50
 #endif
 #ifndef CrashFunc_Addr
-#define CrashFunc_Addr 0x2BD8110
+#define CrashFunc_Addr 0x2BD8270
 #endif
 #ifndef DebugPrint_Addr
 #define DebugPrint_Addr 0xA992E0
