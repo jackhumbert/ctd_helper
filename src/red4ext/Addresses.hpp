@@ -5,35 +5,32 @@
 #define __LINE_STR__ ZOLTAN_EXPAND_THEN_STRINGISE(__LINE__)
 
 #ifndef AssertionFailed_Addr
-#define AssertionFailed_Addr 0x2BD4FE0
+#define AssertionFailed_Addr 0x28ECF74
 #endif
 #ifndef Breakpoint_Addr
-#define Breakpoint_Addr 0x287D50
+#define Breakpoint_Addr 0x1FD510C
 #endif
 #ifndef CrashFunc_Addr
-#define CrashFunc_Addr 0x2BD8270
-#endif
-#ifndef DebugPrint_Addr
-#define DebugPrint_Addr 0xA992E0
+#define CrashFunc_Addr 0x28EE3F0
 #endif
 #ifndef InvokeStatic_Addr
-#define InvokeStatic_Addr 0x288860
+#define InvokeStatic_Addr 0x14B838
 #endif
 #ifndef InvokeVirtual_Addr
-#define InvokeVirtual_Addr 0x28A140
+#define InvokeVirtual_Addr 0x207F6C
 #endif
 #ifndef Murmur3_32_Addr
-#define Murmur3_32_Addr 0x276B80
+#define Murmur3_32_Addr 0x77FA14
 #endif
 #ifndef ScriptHost_Get_Addr
-#define ScriptHost_Get_Addr 0x2760F0
+#define ScriptHost_Get_Addr 0x710BA0
 #endif
 #ifndef ScriptHost_VFT_Addr
-#define ScriptHost_VFT_Addr 0x312FE00
+#define ScriptHost_VFT_Addr 0x2A21CF8
 #endif
 #ifndef ScriptInterface_VFT_Addr
-#define ScriptInterface_VFT_Addr 0x312FEA0
+#define ScriptInterface_VFT_Addr 0x2A21CE8
 #endif
 #ifndef ShowMessageBox_Addr
-#define ShowMessageBox_Addr 0xA81100
+#define ShowMessageBox_Addr 0x2187C9C
 #endif

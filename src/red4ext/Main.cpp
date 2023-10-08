@@ -98,6 +98,7 @@ std::mutex queueLock;
 std::map<std::string, std::queue<CallPair>> funcCallQueues;
 std::string lastThread;
 ScriptBundle * bundle;
+bool bundle_loaded = false;
 
 bool scriptLinkingError = false;
 
@@ -113,25 +114,25 @@ const wchar_t *errorCaption = L"Script Type Validation Error";
 // 1.61 RVA: 0xA88980
 // 1.61hf RVA: 0xA88F20
 /// @pattern 40 55 48 83 EC 40 80 39  00 48 8B EA 0F 84 C5 00 00 00 48 89 7C 24 60 48 8B 79 18 44 8B 47 0C 44
-void __fastcall DebugPrint(uintptr_t, RED4ext::CString *);
+// void __fastcall DebugPrint(uintptr_t, RED4ext::CString *);
 
-REGISTER_HOOK(void __fastcall, DebugPrint, uintptr_t a1, RED4ext::CString *a2) {
-  spdlog::error(a2->c_str());
-  const size_t strSize = strlen(a2->c_str()) + 1;
-  wchar_t *wc = new wchar_t[strSize];
+// REGISTER_HOOK(void __fastcall, DebugPrint, uintptr_t a1, RED4ext::CString *a2) {
+//   spdlog::error(a2->c_str());
+//   const size_t strSize = strlen(a2->c_str()) + 1;
+//   wchar_t *wc = new wchar_t[strSize];
 
-  mbstowcs(wc, a2->c_str(), strSize);
-  swprintf(errorMessage, 1000, L"%s\n%s", errorMessage, wc);
-  scriptLinkingError = true;
-  DebugPrint_Original(a1, a2);
-}
+//   mbstowcs(wc, a2->c_str(), strSize);
+//   swprintf(errorMessage, 1000, L"%s\n%s", errorMessage, wc);
+//   scriptLinkingError = true;
+//   DebugPrint_Original(a1, a2);
+// }
 
 // 1.52 RVA: 0xA66B50 / 10906448
 // 1.6  RVA: 0xA704D0
 // 1.61 RVA: 0xA708A0
 // 1.61hf1 RVA: 0xA70DE0
 // 1.63 0xA81100
-/// @pattern 48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 20 55 48 8D 6C 24 A9 48 81 EC ? 00 00 00 0F B6 D9 0F
+/// @pattern 48 8B C4 48 89 58 08 48 89 70 10 48 89 78 18 55 48 8D 68 A1 48 81 EC E0 00 00 00 0F B6 D9 40 8A
 uintptr_t __fastcall ShowMessageBox(char, char);
 
 REGISTER_HOOK(uintptr_t __fastcall, ShowMessageBox, char a1, char a2) {
@@ -144,7 +145,7 @@ REGISTER_HOOK(uintptr_t __fastcall, ShowMessageBox, char a1, char a2) {
   }
 }
 
-/// @pattern 48 8B 02 48 83 C0 13 48 89 02 44 0F B6 10 48 FF C0 48 89 02 41 8B C2 4C 8D 15 ? ? ? 03 49 FF
+/// @pattern 48 8B 02 48 83 C0 13 48 89 02 44 0F B6 10 48 FF C0 48 89 02 41 8B C2 4C 8D 15 ? ? ? ? 49 FF
 void __fastcall Breakpoint(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4);
 
 REGISTER_HOOK(void __fastcall, Breakpoint, RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
@@ -171,13 +172,14 @@ void LogFunctionCall(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackF
     auto profiler = CyberpunkMod::Profiler(thread.c_str(), 5);
   #endif
 
-  if (!bundle) {
+  if (!bundle_loaded) {
     auto bundlePath = Utils::GetRootDir() / "r6" / "cache" / "final.redscripts";
     auto bundleLocation =  bundlePath.string();
     // auto engine = RED4ext::CGameEngine::Get();
     // auto bundleLocation = engine->scriptsBlobPath;
     spdlog::info("Loading scripts blob: {}", bundleLocation.c_str());
     bundle = bundle_load(bundleLocation.c_str());
+    bundle_loaded = true;
   }
 
   auto invoke = reinterpret_cast<RED4ext::Instr::Invoke *>(stackFrame->code);
@@ -223,7 +225,7 @@ void LogFunctionCall(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackF
 // 1.6  RVA: 0x27E1E0 / 2613728
 // 1.61 RVA: 0x27E790
 // 1.61hf RVA: 0x27E810
-/// @pattern 48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 54 41 55 41 56 41 57 48 83 EC 40 48 8B 02 4C
+/// @pattern 4C 89 4C 24 20 4C 89 44 24 18 55 53 56 57 41 54 41 55 41 56 41 57 48 81 EC D8 01 00 00 48 8D 6C
 void __fastcall InvokeStatic(RED4ext::IScriptable *, RED4ext::CStackFrame *stackFrame, uintptr_t, uintptr_t);
 
 REGISTER_HOOK(void __fastcall, InvokeStatic, RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
@@ -238,13 +240,13 @@ REGISTER_HOOK(void __fastcall, InvokeStatic, RED4ext::IScriptable *context, RED4
   InvokeStatic_Original(context, stackFrame, a3, a4);
 }
 
-/// @pattern 48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 54 41 55 41 56 41 57 48 83 EC 40 48 8B 02 48
+/// @pattern 48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 54 41 55 41 56 41 57 48 83 EC 40 48 8B 02 4D
 void __fastcall InvokeVirtual(RED4ext::IScriptable *, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4);
 
 REGISTER_HOOK(void __fastcall, InvokeVirtual, RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
   if (ctd_helper_enabled) {
     auto invokeVirtual = reinterpret_cast<RED4ext::Instr::InvokeVirtual *>(stackFrame->code);
-    auto cls = context->unk30;
+    auto cls = context->nativeType;
     if (!cls)
       cls = context->GetNativeType();
     auto func = cls->GetFunction(invokeVirtual->funcName);
@@ -543,8 +545,7 @@ void print_log(std::ofstream& stream, std::string name, std::filesystem::path pa
 // 1.6  RVA: 0x2B93EF0 / 45694704
 // 1.61 RVA: 0x2B99290
 // 1.61hf RVA: 0x2B9BC70
-/// @pattern 48 8B C4 55 56 57 48 8D 68 A1 48 81 EC A0
-/// @nth 2/3
+/// @pattern 4C 8B DC 49 89 5B 08 49 89 73 10 57 48 83 EC 20 48 8B 05 E1 C2 02 01 48 8B FA 40 8A F1 48 83 F8
 void __fastcall CrashFunc(uint8_t a1, uintptr_t a2);
 
 REGISTER_HOOK(void __fastcall, CrashFunc, uint8_t a1, uintptr_t a2) {
@@ -648,7 +649,7 @@ REGISTER_HOOK(void __fastcall, CrashFunc, uint8_t a1, uintptr_t a2) {
 // 1.6  RVA: 0x2B90C60 / 45681760
 // 1.61 RVA: 0x2B96000
 // 1.61hf RVA: 0x2B989E0
-/// @pattern 4C 89 4C 24 20 53 55 56 57 48 83 EC 68
+/// @pattern 4C 89 4C 24 20 53 55 56 57 41 54 41 56 48 83 EC 68 80 3D 04 21 A1 00 00 49 8B F8 8B F2 48 8B E9
 __int64 AssertionFailed(const char *, int, const char *, const char *...);
 
 REGISTER_HOOK(__int64, AssertionFailed, const char* file, int lineNum, const char * condition, const char * message...) {

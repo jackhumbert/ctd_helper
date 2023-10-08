@@ -54,15 +54,16 @@ enum EBreakpointState : unsigned __int8 {
   Pause = 0x4,
 };
 
-/// @pattern 48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 48 8B FA 48 8B DA 48 C1 EF 02 48 8B F1 48 85 FF 75
+// 48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 48 8B FA 48 8B DA 48 C1 EF 02 48 8B F1 48 85 FF 75
+/// @pattern 48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 4C 8B DA 48 8B F2 8B FA 49 C1 EB 02 49 8B D3 48 8B
 uint32_t __fastcall Murmur3_32(char *a1, unsigned __int64 length) {
   RED4ext::RelocFunc<uint32_t (*)(char *a1, unsigned __int64 length)> func(Murmur3_32_Addr);
   return func(a1, length);
 }
 
 struct ScriptInterface {
-  /// @pattern 50 6F 72 74 52 61 6E 67 65 00 00 00 00 00 00 00
-  /// @offset -0xB0
+  /// @pattern 50 6F 6F 6C 48 54 54 50 00 00 00 00 00 00 00
+  /// @offset -0x10
   static constexpr const uintptr_t VFT = ScriptInterface_VFT_Addr;
 
   virtual ~ScriptInterface() = default;
@@ -83,12 +84,8 @@ struct ScriptInterface {
 RED4EXT_ASSERT_OFFSET(ScriptInterface, files, 0x28);
 
 struct ScriptHost {
-  // Just after "PortRange"
-  // 1.6  RVA: 0x30E74C0
-  // 1.61hf RVA: 0x30EF5C0
-  // 1.62 RVA: 0x3126DC0
-  /// @pattern 50 6F 72 74 52 61 6E 67 65 00 00 00 00 00 00 00
-  /// @offset -0x10
+  /// @pattern 50 6F 6F 6C 48 54 54 50 00 00 00 00 00 00 00
+  /// @offset -0x20
   static constexpr const uintptr_t VFT = ScriptHost_VFT_Addr;
 
   virtual inline void sub_00() {}; // empty
@@ -134,8 +131,7 @@ struct ScriptHost {
 
   // 1.6  RVA: 0x26BA70 / 2538096
   // 1.62 RVA: 0x26C0A0 / 2539680
-  /// @pattern 40 53 48 83 EC 20 65 48 8B 04 25 58 00 00 00 8B 0D ? ? ? 04 BA 9C 07 00 00 48 8B 0C C8 8B 04
-  /// @nth 25/0
+  /// @pattern 48 83 EC 28 65 48 8B 04 25 58 00 00 00 BA 10 00 00 00 48 8B 08 8B 04 0A 39 05 36 97 6A 03 7F 0C
   static ScriptHost * Get() {
     RED4ext::RelocFunc<decltype(&ScriptHost::Get)> call(ScriptHost_Get_Addr);
     return call();
