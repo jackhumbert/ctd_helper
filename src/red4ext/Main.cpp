@@ -17,7 +17,6 @@
 #include "RED4ext/RTTISystem.hpp"
 #include "Utils.hpp"
 #include "ScriptHost.hpp"
-#include "Addresses.hpp"
 #include <Registrar.hpp>
 #include "Template.hpp"
 #include "Instr.hpp"
@@ -133,9 +132,9 @@ const wchar_t *errorCaption = L"Script Type Validation Error";
 // 1.61hf1 RVA: 0xA70DE0
 // 1.63 0xA81100
 /// @pattern 48 8B C4 48 89 58 08 48 89 70 10 48 89 78 18 55 48 8D 68 A1 48 81 EC E0 00 00 00 0F B6 D9 40 8A
-uintptr_t __fastcall ShowMessageBox(char, char);
+// uintptr_t __fastcall ShowMessageBox(char, char);
 
-REGISTER_HOOK(uintptr_t __fastcall, ShowMessageBox, char a1, char a2) {
+REGISTER_HOOK_HASH(uintptr_t, 1826955878, ShowMessageBox, char a1, char a2) {
   if (scriptLinkingError) {
     swprintf(errorMessage, 1000, L"%s\n%s", errorMessage, errorMessageEnd);
     MessageBoxW(0, errorMessage, errorCaption, MB_SYSTEMMODAL | MB_ICONERROR);
@@ -146,9 +145,11 @@ REGISTER_HOOK(uintptr_t __fastcall, ShowMessageBox, char a1, char a2) {
 }
 
 /// @pattern 48 8B 02 48 83 C0 13 48 89 02 44 0F B6 10 48 FF C0 48 89 02 41 8B C2 4C 8D 15 ? ? ? ? 49 FF
-void __fastcall Breakpoint(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4);
+// 2068388886
+// void __fastcall Breakpoint(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4);
 
-REGISTER_HOOK(void __fastcall, Breakpoint, RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
+// void OpBreakpoint(class IScriptable *,class CScriptStackFrame &,void *,class rtti::IType *)
+REGISTER_HOOK_HASH(void, 2068388886, Breakpoint, RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
   spdlog::info("Redscript breakpoint encountered");
   __debugbreak();
   Breakpoint_Original(context, stackFrame, a3, a4);
@@ -226,9 +227,9 @@ void LogFunctionCall(RED4ext::IScriptable *context, RED4ext::CStackFrame *stackF
 // 1.61 RVA: 0x27E790
 // 1.61hf RVA: 0x27E810
 /// @pattern 4C 89 4C 24 20 4C 89 44 24 18 55 53 56 57 41 54 41 55 41 56 41 57 48 81 EC D8 01 00 00 48 8D 6C
-void __fastcall InvokeStatic(RED4ext::IScriptable *, RED4ext::CStackFrame *stackFrame, uintptr_t, uintptr_t);
+// void __fastcall InvokeStatic(RED4ext::IScriptable *, RED4ext::CStackFrame *stackFrame, uintptr_t, uintptr_t);
 
-REGISTER_HOOK(void __fastcall, InvokeStatic, RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
+REGISTER_HOOK_HASH(void, 1303976829, InvokeStatic, RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
   if (ctd_helper_enabled) {
     auto invokeStatic = reinterpret_cast<RED4ext::Instr::InvokeStatic *>(stackFrame->code);
 
@@ -241,9 +242,9 @@ REGISTER_HOOK(void __fastcall, InvokeStatic, RED4ext::IScriptable *context, RED4
 }
 
 /// @pattern 48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 54 41 55 41 56 41 57 48 83 EC 40 48 8B 02 4D
-void __fastcall InvokeVirtual(RED4ext::IScriptable *, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4);
+// void __fastcall InvokeVirtual(RED4ext::IScriptable *, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4);
 
-REGISTER_HOOK(void __fastcall, InvokeVirtual, RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
+REGISTER_HOOK_HASH(void, 2614041722, InvokeVirtual, RED4ext::IScriptable *context, RED4ext::CStackFrame *stackFrame, uintptr_t a3, uintptr_t a4) {
   if (ctd_helper_enabled) {
     auto invokeVirtual = reinterpret_cast<RED4ext::Instr::InvokeVirtual *>(stackFrame->code);
     auto cls = context->nativeType;
@@ -546,9 +547,10 @@ void print_log(std::ofstream& stream, std::string name, std::filesystem::path pa
 // 1.61 RVA: 0x2B99290
 // 1.61hf RVA: 0x2B9BC70
 /// @pattern 4C 8B DC 49 89 5B 08 49 89 73 10 57 48 83 EC 20 48 8B 05 E1 C2 02 01 48 8B FA 40 8A F1 48 83 F8
-void __fastcall CrashFunc(uint8_t a1, uintptr_t a2);
+// void __fastcall CrashFunc(uint8_t a1, uintptr_t a2);
 
-REGISTER_HOOK(void __fastcall, CrashFunc, uint8_t a1, uintptr_t a2) {
+// void __fastcall red::err::helper::DumpCrashData(char a1, __int64 a2)
+REGISTER_HOOK_HASH(void, 2037521395, CrashFunc, uint8_t a1, uintptr_t a2) {
 
   time_t     now = time(0);
   struct tm  tstruct;
@@ -650,9 +652,10 @@ REGISTER_HOOK(void __fastcall, CrashFunc, uint8_t a1, uintptr_t a2) {
 // 1.61 RVA: 0x2B96000
 // 1.61hf RVA: 0x2B989E0
 /// @pattern 4C 89 4C 24 20 53 55 56 57 41 54 41 56 48 83 EC 68 80 3D 04 21 A1 00 00 49 8B F8 8B F2 48 8B E9
-__int64 AssertionFailed(const char *, int, const char *, const char *...);
+// __int64 AssertionFailed(const char *, int, const char *, const char *...);
 
-REGISTER_HOOK(__int64, AssertionFailed, const char* file, int lineNum, const char * condition, const char * message...) {
+// void red::prv::OnAssertFailed(char const *,unsigned int,char const *,char const *,...)
+REGISTER_HOOK_HASH(void, 4285205681, AssertionFailed, const char* file, int lineNum, const char * condition, const char * message...) {
   va_list args;
   va_start(args, message);
   spdlog::error("File: {} @ Line {}", file, lineNum);
@@ -664,7 +667,7 @@ REGISTER_HOOK(__int64, AssertionFailed, const char* file, int lineNum, const cha
     sprintf(buffer, message, args);
     spdlog::error("Message: {}", buffer);
   }
-  return AssertionFailed_Original(file, lineNum, condition, message, args);
+  AssertionFailed_Original(file, lineNum, condition, message, args);
 }
 
 ModSettings::Variable* variable;
@@ -685,29 +688,29 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::PluginHandle aHandle, RED4ext::
     numberOfProcessors = std::thread::hardware_concurrency();
 
 
-    auto handle = GetModuleHandle(L"mod_settings");
-    if (!handle) {
-      SetDllDirectory((Utils::GetRootDir() / "red4ext" / "plugins" / L"mod_settings").c_str());
-      handle = LoadLibrary(L"mod_settings");
-    }
-    if (handle) {
-      typedef void (WINAPI * add_variable_t)(ModSettings::Variable* variable);
-      auto addVariable = reinterpret_cast<add_variable_t>(GetProcAddress(handle, "AddVariable"));
+    // auto handle = GetModuleHandle(L"mod_settings");
+    // if (!handle) {
+    //   SetDllDirectory((Utils::GetRootDir() / "red4ext" / "plugins" / L"mod_settings").c_str());
+    //   handle = LoadLibrary(L"mod_settings");
+    // }
+    // if (handle) {
+    //   typedef void (WINAPI * add_variable_t)(ModSettings::Variable* variable);
+    //   auto addVariable = reinterpret_cast<add_variable_t>(GetProcAddress(handle, "AddVariable"));
 
-      variable = (ModSettings::Variable *)malloc(sizeof(ModSettings::Variable));
-      memset(variable, 0, sizeof(ModSettings::Variable));
-      variable->modName = "CTD Helper";
-      variable->className = "ctd_helper";
-      // variable->categoryName = "General";
-      variable->propertyName = "enabled";
-      variable->type = "Bool";
-      variable->displayName = "Enable Script Function Logging";
-      variable->description = "Enable the logging of script calls to aid in diagnosing crashes";
-      variable->defaultValue.b = ctd_helper_enabled;
-      variable->callback = std::make_shared<ModSettings::runtime_class_callback_t>(ctd_helper_callback);
-      addVariable(variable);
-      // free(variable);
-    }
+    //   variable = (ModSettings::Variable *)malloc(sizeof(ModSettings::Variable));
+    //   memset(variable, 0, sizeof(ModSettings::Variable));
+    //   variable->modName = "CTD Helper";
+    //   variable->className = "ctd_helper";
+    //   // variable->categoryName = "General";
+    //   variable->propertyName = "enabled";
+    //   variable->type = "Bool";
+    //   variable->displayName = "Enable Script Function Logging";
+    //   variable->description = "Enable the logging of script calls to aid in diagnosing crashes";
+    //   variable->defaultValue.b = ctd_helper_enabled;
+    //   variable->callback = std::make_shared<ModSettings::runtime_class_callback_t>(ctd_helper_callback);
+    //   addVariable(variable);
+    //   // free(variable);
+    // }
 
     break;
   }

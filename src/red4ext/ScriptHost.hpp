@@ -1,5 +1,5 @@
 #include <RED4ext/RED4ext.hpp>
-#include "Addresses.hpp"
+#include <RED4ext/Relocation.hpp>
 
 struct ScriptFile {
   // Murmur3
@@ -57,14 +57,14 @@ enum EBreakpointState : unsigned __int8 {
 // 48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 48 8B FA 48 8B DA 48 C1 EF 02 48 8B F1 48 85 FF 75
 /// @pattern 48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 4C 8B DA 48 8B F2 8B FA 49 C1 EB 02 49 8B D3 48 8B
 uint32_t __fastcall Murmur3_32(char *a1, unsigned __int64 length) {
-  RED4ext::RelocFunc<uint32_t (*)(char *a1, unsigned __int64 length)> func(Murmur3_32_Addr);
+  RED4ext::UniRelocFunc<uint32_t (*)(char *a1, unsigned __int64 length)> func(325782886);
   return func(a1, length);
 }
 
 struct ScriptInterface {
   /// @pattern 50 6F 6F 6C 48 54 54 50 00 00 00 00 00 00 00
   /// @offset -0x10
-  static constexpr const uintptr_t VFT = ScriptInterface_VFT_Addr;
+  static constexpr const uint32_t VFT = 196416412;
 
   virtual ~ScriptInterface() = default;
   virtual bool sub_08(IScriptAction ** scriptAction, void* debugger);
@@ -86,7 +86,7 @@ RED4EXT_ASSERT_OFFSET(ScriptInterface, files, 0x28);
 struct ScriptHost {
   /// @pattern 50 6F 6F 6C 48 54 54 50 00 00 00 00 00 00 00
   /// @offset -0x20
-  static constexpr const uintptr_t VFT = ScriptHost_VFT_Addr;
+  static constexpr const uint32_t VFT = 1451495369;
 
   virtual inline void sub_00() {}; // empty
   virtual inline void sub_08() {}; // load
@@ -110,13 +110,13 @@ struct ScriptHost {
 
   // something with (), global exec|native functions
   virtual inline bool sub_50(RED4ext::CString * a1) {
-    RED4ext::RelocFunc<decltype(&ScriptHost::sub_50)> call(VFT, 0x50);
+    RED4ext::UniRelocFunc<decltype(&ScriptHost::sub_50)> call(VFT, 0x50);
     return call(this, a1);
   };
 
   // something else with (), scripted functions, exec || event
   virtual inline bool sub_58(RED4ext::IScriptable * aContext, RED4ext::CString * a2) {
-    RED4ext::RelocFunc<decltype(&ScriptHost::sub_58)> call(VFT, 0x58);
+    RED4ext::UniRelocFunc<decltype(&ScriptHost::sub_58)> call(VFT, 0x58);
     return call(this, aContext, a2);
   };
 
@@ -133,7 +133,7 @@ struct ScriptHost {
   // 1.62 RVA: 0x26C0A0 / 2539680
   /// @pattern 48 83 EC 28 65 48 8B 04 25 58 00 00 00 BA 10 00 00 00 48 8B 08 8B 04 0A 39 05 36 97 6A 03 7F 0C
   static ScriptHost * Get() {
-    RED4ext::RelocFunc<decltype(&ScriptHost::Get)> call(ScriptHost_Get_Addr);
+    RED4ext::UniRelocFunc<decltype(&ScriptHost::Get)> call(4254734968);
     return call();
   };
 
